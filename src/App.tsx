@@ -39,6 +39,7 @@ import { createSampleFiles } from "./lib/samplePhotos";
 import { playSound, type SoundEffect } from "./lib/soundEffects";
 import { recognizePhotoBatch } from "./lib/visionClient";
 import type { JournalDraft, PhotoAsset, StyleId, TemplateId, UserAnswers } from "./types";
+import { getAvailableModels } from "./lib/modelConfig";
 
 const defaultAnswers: UserAnswers = {
   scene: "一次旅程",
@@ -52,6 +53,7 @@ const defaultAnswers: UserAnswers = {
   edgeStyles: [],
   decorations: [],
   visionTags: {},
+  selectedModel: "flux-2-pro",  // 默认使用 FLUX.2 Pro
 };
 
 /** 多选 chip 值的序列化分隔符，统一存到 details[key] 里。 */
@@ -585,7 +587,7 @@ function GeneratedShowcase({ draft, onDownload }: { draft: JournalDraft; onDownl
     >
       <header className="generated-hero-head">
         <div>
-          <p className="generated-hero-kicker">LLM · UnifiedPic2PicAction</p>
+          <p className="generated-hero-kicker">LLM · FLUX.2 [pro]</p>
           <h3>{draft.title}</h3>
           <small>{draft.subtitle}</small>
         </div>
@@ -750,6 +752,31 @@ function InfoModal({
             <div className="control-row">
               <div className="band-heading">
                 <span>
+                  <Sparkles size={17} />
+                  生成模型
+                </span>
+              </div>
+              <div className="segmented">
+                {getAvailableModels().map((model) => (
+                  <button
+                    key={model.id}
+                    className={classNames(answers.selectedModel === model.id && "is-active")}
+                    type="button"
+                    onClick={() => {
+                      onSound("tap");
+                      onSetAnswers((current) => ({ ...current, selectedModel: model.id }));
+                    }}
+                    title={model.description}
+                  >
+                    {model.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="control-row">
+              <div className="band-heading">
+                <span>
                   <Palette size={17} />
                   风格
                 </span>
@@ -804,7 +831,20 @@ function InfoModal({
                 <LinkIcon size={17} />
                 图片远程链接
               </span>
-              <small>{photos.length ? `共 ${photos.length} 张` : "上传图片后填写"}</small>
+              <small>
+                {photos.length ? (
+                  <>
+                    共 <b>{photos.filter((p) => p.remoteUrl).length}</b> 张
+                    {photos.some((p) => !p.remoteUrl) && (
+                      <span style={{ color: "#d68a2b", marginLeft: "0.5em" }}>
+                        （{photos.filter((p) => !p.remoteUrl).length} 张待补充）
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  "上传图片后填写"
+                )}
+              </small>
             </div>
             <p className="remote-tip">
               本地上传的图片浏览器无法直接交给 LLM 读取。请填上能公网/内网访问的图片链接；为空则使用接口示例链接占位以确保流程可跑通。
@@ -1301,8 +1341,9 @@ function DrawingOverlay({
   isLeaving: boolean;
   attemptInfo: { attempt: number; total: number } | null;
 }) {
-  // 只取最多 N 张参与轮播，避免极端情况下渲染过多 DOM
-  const carousel = photos.slice(0, DRAWING_MAX_CARDS);
+  // 只显示上传成功的图片，然后取最多 N 张参与轮播，避免极端情况下渲染过多 DOM
+  const successfulPhotos = photos.filter((p) => p.remoteUrl);
+  const carousel = successfulPhotos.slice(0, DRAWING_MAX_CARDS);
   const [activeIndex, setActiveIndex] = useState(0);
   const [phaseIndex, setPhaseIndex] = useState(0);
   /** 加载失败的图片 id 集合，用于把破图换成纸纹占位。 */

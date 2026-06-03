@@ -28,6 +28,13 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/maas/, ""),
       },
+      // 把浏览器对 /replicate/... 的请求转发到 Replicate API，避免 CORS。
+      "/replicate": {
+        target: "https://api.replicate.com",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/replicate/, ""),
+      },
     },
   },
 });

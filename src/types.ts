@@ -1,3 +1,5 @@
+import type { ModelType } from "./lib/modelConfig";
+
 export type StyleId = "auto" | "elegant" | "vintage" | "travel" | "soft";
 
 export type TemplateId = "atlas" | "collage" | "magazine" | "archive";
@@ -10,6 +12,8 @@ export type UserAnswers = {
   narrator: string;
   density: "rich" | "balanced";
   titleSeed: string;
+  /** 选择的图生图模型 */
+  selectedModel: ModelType;
   /**
    * 根据当前 scene 在弹窗中补充的字段（如目的地、同行、天气…），key 与 SceneDetailField.key 对应。
    * 值统一为字符串：单选 chip 直接存名，多选 chip 用「、」拼接。

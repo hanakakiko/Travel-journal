@@ -1,11 +1,26 @@
 import { edgeStyleOptions, sceneOptions, stylePresets, templatePresets } from "../data/presets";
 import type { JournalDraft, JournalPage, PhotoAsset, StyleId, TemplateId, UserAnswers } from "../types";
 import { formatDate } from "./format";
+import { callModelAPI } from "./modelRouter";
 
 /** 控制 console 调试日志开关：开发模式默认开。 */
-const KRATOS_DEBUG = import.meta.env.DEV;
+const DEBUG_ENABLED = import.meta.env.DEV;
+
+/**
+ * 通用模型日志函数，支持不同的模型名称。
+ * 使用方式：
+ *   - createModelLogger("GPT-2") 创建 GPT-2 的日志函数
+ *   - createModelLogger("FLUX.2 [pro]") 创建 FLUX.2 的日志函数
+ */
+const createModelLogger = (modelName: string) => {
+  return (...args: unknown[]) => {
+    if (DEBUG_ENABLED) console.info(`[${modelName}]`, ...args);
+  };
+};
+
+// 为了向后兼容，保留 klog 作为通用日志函数（不带模型前缀）
 const klog = (...args: unknown[]) => {
-  if (KRATOS_DEBUG) console.info("[Kratos]", ...args);
+  if (DEBUG_ENABLED) console.info("[Model]", ...args);
 };
 
 /** 把网络错误 / 超时错误 / HTTP 错误统一成中文提示。 */
@@ -47,6 +62,20 @@ type KratosPic2PicParams = {
   targetWidth?: number;
   targetHeight?: number;
   modelType?: string;
+  timeoutMs?: number;
+  /** 最大尝试次数（含首次），默认 3。 */
+  maxAttempts?: number;
+  /** 重试间隔基准毫秒，实际等待时长 = retryDelayMs * 当前已失败次数（线性退避）。默认 1500。 */
+  retryDelayMs?: number;
+  /** 每次尝试前回调。 */
+  onAttempt?: (info: KratosAttemptInfo) => void;
+};
+
+type Flux2ProPic2PicParams = {
+  prompt: string;
+  imageUrls: string[];
+  targetWidth?: number;
+  targetHeight?: number;
   timeoutMs?: number;
   /** 最大尝试次数（含首次），默认 3。 */
   maxAttempts?: number;
@@ -552,10 +581,18 @@ const callKratosUnifiedPic2PicOnce = async ({
     },
   };
 
-  klog("request →", endpoint, body);
+  const glog = createModelLogger("GPT-2");
+  glog("request →", endpoint);
+  glog("  modelType:", modelType);
+  glog("  prompt:", prompt.slice(0, 100) + "...");
+  glog("  imageUrls:", imageUrls.length, "张图片");
+  glog("  targetWidth:", targetWidth);
+  glog("  targetHeight:", targetHeight);
+  glog("=== 完整请求体 ===");
+  glog(JSON.stringify(body, null, 2));
 
   const response = await fetchWithTimeout(
-    "Kratos 接口",
+    "GPT-2 接口",
     endpoint,
     {
       method: "POST",
@@ -568,28 +605,30 @@ const callKratosUnifiedPic2PicOnce = async ({
   const text = await response.text();
 
   if (!response.ok) {
-    klog("← HTTP error", response.status, text);
-    throw new Error(`Kratos 接口返回 HTTP ${response.status}${text ? `：${text.slice(0, 160)}` : ""}`);
+    glog("← HTTP error", response.status, text);
+    throw new Error(`GPT-2 接口返回 HTTP ${response.status}${text ? `：${text.slice(0, 160)}` : ""}`);
   }
 
   let payload: unknown;
   try {
     payload = text ? JSON.parse(text) : null;
   } catch {
-    klog("← non-JSON body", text);
-    throw new Error(`Kratos 接口返回非 JSON：${text.slice(0, 160)}`);
+    glog("← non-JSON body", text);
+    throw new Error(`GPT-2 接口返回非 JSON：${text.slice(0, 160)}`);
   }
 
-  klog("← response", payload);
+  glog("← response", payload);
+  glog("=== 完整响应体 ===");
+  glog(JSON.stringify(payload, null, 2));
 
   const businessError = extractBusinessError(payload);
   if (businessError) {
-    throw new Error(`Kratos 业务报错：${businessError}`);
+    throw new Error(`GPT-2 业务报错：${businessError}`);
   }
 
   const imageUrl = extractGeneratedImageUrl(payload);
   if (!imageUrl) {
-    throw new Error("Kratos 接口未在返回结构中找到图片链接（已在控制台打印 raw response，请确认字段路径）");
+    throw new Error("GPT-2 接口未在返回结构中找到图片链接（已在控制台打印 raw response，请确认字段路径）");
   }
 
   return { imageUrl, raw: payload };
@@ -613,20 +652,21 @@ export const callKratosUnifiedPic2Pic = async ({
 }: KratosPic2PicParams) => {
   const total = Math.max(1, maxAttempts);
   let lastError: Error | undefined;
+  const glog = createModelLogger("GPT-2");
 
   for (let attempt = 1; attempt <= total; attempt++) {
     onAttempt?.({ attempt, totalAttempts: total, lastError });
 
     try {
       const result = await callKratosUnifiedPic2PicOnce(rest);
-      if (attempt > 1) klog(`✓ succeeded on attempt ${attempt}/${total}`);
+      if (attempt > 1) glog(`✓ succeeded on attempt ${attempt}/${total}`);
       return result;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       const retryable = isRetryableKratosError(lastError);
       const isLast = attempt >= total;
 
-      klog(
+      glog(
         `× attempt ${attempt}/${total} failed`,
         { retryable, isLast, message: lastError.message },
       );
@@ -642,13 +682,238 @@ export const callKratosUnifiedPic2Pic = async ({
 
       // 线性退避：第 1 次失败后等 1.5s 再发第 2 次；第 2 次失败后等 3s 再发第 3 次
       const waitMs = retryDelayMs * attempt;
-      klog(`… waiting ${waitMs}ms before next retry`);
+      glog(`… waiting ${waitMs}ms before next retry`);
       await sleep(waitMs);
     }
   }
 
   // 理论不可达：循环内要么 return 要么 throw
-  throw lastError ?? new Error("Kratos 接口未知失败");
+  throw lastError ?? new Error("GPT-2 接口未知失败");
+};
+
+/**
+ * 单次调用 FLUX.2 [pro] 图生图 API，不带重试。
+ * 拆出来是为了让上层 `callFlux2ProPic2Pic` 专注做「重试编排」。
+ */
+const callFlux2ProPic2PicOnce = async ({
+  prompt,
+  imageUrls,
+  targetWidth = DEFAULT_GEN_WIDTH,
+  targetHeight = DEFAULT_GEN_HEIGHT,
+  timeoutMs = 300_000,
+}: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
+  // Replicate API 端点（通过本地代理避免 CORS）
+  const endpoint = "/replicate/v1/predictions";
+  
+  // 从环境变量获取 API 密钥
+  const apiToken = import.meta.env.VITE_REPLICATE_API_TOKEN as string | undefined;
+  
+  if (!apiToken) {
+    throw new Error(
+      "FLUX.2 [pro] API Token 未配置。请在 .env 文件中设置 VITE_REPLICATE_API_TOKEN，" +
+      "或参考 .env.example 文件进行配置。"
+    );
+  }
+
+  // 构建参考图参数（FLUX.2 支持最多 8 张）
+  // 根据 Replicate API schema，参考图参数是 input_images，它是一个数组
+  const validUrls = imageUrls.slice(0, 8).filter(url => url && url.trim());
+  
+  if (!validUrls.length) {
+    throw new Error("至少需要一张参考图");
+  }
+
+  const flog = createModelLogger("FLUX.2 [pro]");
+  flog(`✓ 使用 ${validUrls.length} 张参考图`);
+
+  // 计算宽高比并转换成 FLUX.2 支持的格式
+  // FLUX.2 支持的 aspect_ratio: "match_input_image", "custom", "1:1", "16:9", "3:2", "2:3", "4:5", "5:4", "9:16", "3:4", "4:3"
+  // 我们的默认是 1024x1536 (2:3)，所以用 "9:16"
+  const aspectRatio = "9:16"; // 竖向长图，接近 2:3 比例
+
+  // 构建请求体
+  // 根据 FLUX.2 [pro] 的 API schema，参数应该是：
+  // - input_images: 数组，最多 8 张图片
+  // - aspect_ratio: 宽高比
+  // - resolution: 分辨率（可选，默认 1 MP）
+  // - output_format: 输出格式（webp, jpg, png）
+  
+  const body = {
+    version: "black-forest-labs/flux-2-pro",
+    input: {
+      prompt,
+      input_images: validUrls,
+      aspect_ratio: aspectRatio,
+      resolution: "1 MP", // 推荐使用 2 MP 或以下
+      output_format: "png",
+    },
+  };
+
+  flog("request →", endpoint);
+  flog("  version:", body.version);
+  flog("  input.prompt:", body.input.prompt.slice(0, 100) + "...");
+  flog("  input.input_images:", validUrls.length, "张图片");
+  flog("  input.aspect_ratio:", body.input.aspect_ratio);
+  flog("  input.resolution:", body.input.resolution);
+  flog("  input.output_format:", body.input.output_format);
+  
+  // 完整的请求体日志（便于调试）
+  flog("=== 完整请求体 ===");
+  flog(JSON.stringify(body, null, 2));
+
+  const response = await fetchWithTimeout(
+    "FLUX.2 [pro] API",
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Token ${apiToken}`,
+      },
+      body: JSON.stringify(body),
+    },
+    timeoutMs,
+  );
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    flog("← HTTP error", response.status, text);
+    throw new Error(`FLUX.2 [pro] API 返回 HTTP ${response.status}${text ? `：${text.slice(0, 160)}` : ""}`);
+  }
+
+  let payload: unknown;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    flog("← non-JSON body", text);
+    throw new Error(`FLUX.2 [pro] API 返回非 JSON：${text.slice(0, 160)}`);
+  }
+
+  flog("← response", payload);
+  
+  // 完整的响应体日志（便于调试）
+  flog("=== 完整响应体 ===");
+  flog(JSON.stringify(payload, null, 2));
+
+  // Replicate API 返回的是一个 prediction 对象，需要轮询获取结果
+  // 这里我们需要等待 prediction 完成
+  const predictionId = (payload as Record<string, unknown>)?.id as string | undefined;
+  if (!predictionId) {
+    throw new Error("FLUX.2 [pro] API 未返回 prediction ID");
+  }
+
+  // 轮询等待 prediction 完成（最多等待 5 分钟）
+  const maxWaitTime = 300_000; // 5 分钟
+  const pollInterval = 1000; // 1 秒
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWaitTime) {
+    const statusResponse = await fetchWithTimeout(
+      "FLUX.2 [pro] 状态查询",
+      `${endpoint}/${predictionId}`,
+      {
+        method: "GET",
+        headers: {
+          "Authorization": `Token ${apiToken}`,
+        },
+      },
+      30_000,
+    );
+
+    const statusText = await statusResponse.text();
+    const statusPayload = JSON.parse(statusText);
+    const status = (statusPayload as Record<string, unknown>)?.status as string | undefined;
+
+    flog(`← prediction status: ${status}`);
+    
+    // 完整的状态响应日志（便于调试）
+    if (status === "succeeded" || status === "failed") {
+      flog("=== 完整状态响应体 ===");
+      flog(JSON.stringify(statusPayload, null, 2));
+    }
+
+    if (status === "succeeded") {
+      // Replicate API 返回的 output 是一个 URI 字符串
+      const output = (statusPayload as Record<string, unknown>)?.output as string | undefined;
+      const imageUrl = output || extractGeneratedImageUrl(statusPayload);
+      
+      if (!imageUrl) {
+        flog("← statusPayload:", statusPayload);
+        throw new Error("FLUX.2 [pro] API 未在返回结构中找到图片链接");
+      }
+      
+      flog(`✓ 生成成功，图片 URL: ${imageUrl.slice(0, 80)}...`);
+      return { imageUrl, raw: statusPayload };
+    }
+
+    if (status === "failed") {
+      const error = (statusPayload as Record<string, unknown>)?.error as string | undefined;
+      throw new Error(`FLUX.2 [pro] API 生成失败：${error || "未知错误"}`);
+    }
+
+    // 等待后继续轮询
+    await sleep(pollInterval);
+  }
+
+  throw new Error("FLUX.2 [pro] API 生成超时（5 分钟）");
+};
+
+/**
+ * 调用 FLUX.2 [pro] 图生图 API（自动重试版）。
+ *
+ * 重试策略：
+ *   - 默认最多 3 次尝试（首次 + 2 次重试）；
+ *   - 仅对可重试错误（网络抖动、超时、5xx/429）触发；
+ *   - 线性退避：第 2 次等 1.5s、第 3 次等 3s（基于 retryDelayMs * 已失败次数）；
+ *   - 全部失败时抛出最后一次错误，并附加「(已重试 N 次)」便于排查；
+ *   - 每次尝试前通过 onAttempt 回调上报进度（含 lastError），UI 可据此显示「第 N 次尝试」。
+ */
+export const callFlux2ProPic2Pic = async ({
+  maxAttempts = 3,
+  retryDelayMs = 1500,
+  onAttempt,
+  ...rest
+}: Flux2ProPic2PicParams) => {
+  const total = Math.max(1, maxAttempts);
+  let lastError: Error | undefined;
+  const flog = createModelLogger("FLUX.2 [pro]");
+
+  for (let attempt = 1; attempt <= total; attempt++) {
+    onAttempt?.({ attempt, totalAttempts: total, lastError });
+
+    try {
+      const result = await callFlux2ProPic2PicOnce(rest);
+      if (attempt > 1) flog(`✓ succeeded on attempt ${attempt}/${total}`);
+      return result;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const retryable = isRetryableKratosError(lastError);
+      const isLast = attempt >= total;
+
+      flog(
+        `× attempt ${attempt}/${total} failed`,
+        { retryable, isLast, message: lastError.message },
+      );
+
+      if (isLast || !retryable) {
+        // 永久错误立即抛；最后一次也直接抛
+        if (attempt > 1) {
+          // 已经重试过，给最终错误打上重试痕迹，方便用户/排查识别
+          throw new Error(`${lastError.message}（已重试 ${attempt - 1} 次仍失败）`);
+        }
+        throw lastError;
+      }
+
+      // 线性退避：第 1 次失败后等 1.5s 再发第 2 次；第 2 次失败后等 3s 再发第 3 次
+      const waitMs = retryDelayMs * attempt;
+      flog(`… waiting ${waitMs}ms before next retry`);
+      await sleep(waitMs);
+    }
+  }
+
+  // 理论不可达：循环内要么 return 要么 throw
+  throw lastError ?? new Error("FLUX.2 [pro] API 调用失败");
 };
 
 /**
@@ -687,24 +952,37 @@ const resolveImageUrls = (photos: PhotoAsset[], extra?: string[]): string[] => {
 export const requestJournalDraft = async (request: StoryRequest): Promise<JournalDraft> => {
   const draft = createMockJournalDraft(request);
 
+  // 先解析实际可用的图片 URL
+  const imageUrls = resolveImageUrls(request.photos, request.remoteUrls);
+  
+  // 然后用实际可用的图片数量来生成 prompt（而不是原始的 photos.length）
   const prompt = buildKratosPrompt(
     request.answers,
     request.styleId,
     request.templateId ?? "collage",
-    request.photos.length,
+    imageUrls.length,  // 使用实际可用的图片数量
     request.photos.map((p) => p.id),
   );
-  const imageUrls = resolveImageUrls(request.photos, request.remoteUrls);
 
   try {
-    const { imageUrl, raw } = await callKratosUnifiedPic2Pic({
+    // 使用模型路由调用对应的 API
+    const modelName = request.answers.selectedModel === "flux-2-pro" ? "FLUX.2 [pro]" : "GPT-2";
+    const mlog = createModelLogger(modelName);
+    
+    mlog(`开始调用 ${modelName} API...`);
+    mlog(`  prompt 长度: ${prompt.length} 字符`);
+    mlog(`  参考图数量: ${imageUrls.length} 张`);
+    
+    const { imageUrl, raw } = await callModelAPI(request.answers.selectedModel, {
       prompt,
       imageUrls,
       onAttempt: request.onAttempt,
       targetWidth: DEFAULT_GEN_WIDTH,
       targetHeight: DEFAULT_GEN_HEIGHT,
-      modelType: "gpt2",
     });
+    
+    mlog(`✓ ${modelName} API 调用成功`);
+    
     return {
       ...draft,
       generatedImageUrl: imageUrl,
@@ -712,11 +990,13 @@ export const requestJournalDraft = async (request: StoryRequest): Promise<Journa
       generationRaw: raw,
     };
   } catch (error) {
-    klog("× call failed", error);
+    const modelName = request.answers.selectedModel === "flux-2-pro" ? "FLUX.2 [pro]" : "GPT-2";
+    const mlog = createModelLogger(modelName);
+    mlog("× call failed", error);
     return {
       ...draft,
       generatedPrompt: prompt,
-      generationError: `Kratos 接口调用失败：${humanizeError(error)}`,
+      generationError: `${modelName} API 调用失败：${humanizeError(error)}`,
     };
   }
 };
