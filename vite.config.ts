@@ -16,7 +16,7 @@ export default defineConfig({
       // 避免 dev 环境下浏览器 PUT 触发 CORS preflight 被拦截。
       // 上传成功后给 LLM 的链接仍是公网 COS URL（见 cosUploader.ts）。
       "/cos-upload": {
-        target: "https://test2-1307114076.cos.ap-guangzhou.myqcloud.com",
+        target: "https://journal-photos-1302323802.cos.ap-shanghai.myqcloud.com",
         changeOrigin: true,
         secure: true,
         rewrite: (path) => path.replace(/^\/cos-upload/, ""),

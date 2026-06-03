@@ -5,7 +5,7 @@
  *      可访问的公网 URL，再交给 LLM 做参考图。
  *
  * 等价 curl：
- *   curl -X PUT "https://test2-1307114076.cos.ap-guangzhou.myqcloud.com/{path}" \
+ *   curl -X PUT "https://journal-photos-1302323802.cos.ap-shanghai.myqcloud.com/{path}" \
  *        -H "Content-Type: image/png" \
  *        --data-binary @本地文件
  *
@@ -22,7 +22,7 @@
 /** 上传基础 URL（含协议、bucket-region 域名，不含末尾斜杠）。 */
 const COS_PUT_BASE =
   (import.meta.env.VITE_COS_PUT_BASE as string | undefined)?.replace(/\/+$/, "") ||
-  "https://test2-1307114076.cos.ap-guangzhou.myqcloud.com";
+  "https://journal-photos-1302323802.cos.ap-shanghai.myqcloud.com";
 
 /** 对象前缀（默认 journal/）。 */
 const COS_PATH_PREFIX = ((import.meta.env.VITE_COS_PATH_PREFIX as string | undefined) || "journal/").replace(
