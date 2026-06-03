@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from "react";
 import { useEffect, useState } from "react";
+import { ErrorAlert } from "./lib/ErrorAlert";
 import {
   decorationOptions,
   edgeStyleOptions,
@@ -77,6 +78,7 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
+  const [isErrorAlertOpen, setIsErrorAlertOpen] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   /**
    * 「手绘中」遮罩的持久挂载状态：
@@ -137,6 +139,7 @@ function App() {
   const processFiles = async (files: File[]) => {
     if (!files.length) return;
     setError("");
+    setIsErrorAlertOpen(false);
     setIsProcessing(true);
     try {
       const imageFiles = files.filter((file) => file.type.startsWith("image/"));
@@ -150,15 +153,27 @@ function App() {
 
       const failedCount = processed.filter((photo) => !photo.remoteUrl).length;
       if (failedCount > 0) {
-        // 给一个温和提示，不阻断流程：用户仍可手填 remoteUrl 或重试。
-        setError(
-          `已处理 ${processed.length} 张图片，其中 ${failedCount} 张未能自动上传到云端` +
-            "（可能是网络或 CORS 问题，已记录到控制台）；可在「补充信息」面板手动填入可访问的图片链接。",
-        );
+        // 给一个明确的警告，说明这些图片无法被 LLM 使用
+        const failedPhotos = processed.filter((photo) => !photo.remoteUrl);
+        const failedList = failedPhotos
+          .map((p, idx) => {
+            const errorReason = p.uploadError ? ` — ${p.uploadError}` : "";
+            return `${idx + 1}. ${p.fileName}${errorReason}`;
+          })
+          .join("\n");
+        const errorMessage =
+          `${failedCount} 张图片上传失败，无法被 AI 使用：\n\n${failedList}\n\n` +
+          `解决方案：\n` +
+          `1. 在「补充信息」面板手动填入这些图片的可访问链接\n` +
+          `2. 删除这些图片后重新上传\n` +
+          `3. 继续生成但结果可能不会用到这些图片`;
+        setError(errorMessage);
+        setIsErrorAlertOpen(true);
       }
       if (processed.length) play("upload");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "图片读取失败");
+      setIsErrorAlertOpen(true);
     } finally {
       setIsProcessing(false);
     }
@@ -258,6 +273,18 @@ function App() {
       setError("请先上传图片");
       return;
     }
+
+    // 检查是否有上传失败的图片
+    const failedPhotos = photos.filter((p) => !p.remoteUrl);
+    if (failedPhotos.length > 0) {
+      const failedNames = failedPhotos.map((p) => p.fileName).join("、");
+      const confirmed = window.confirm(
+        `⚠️ 以下 ${failedPhotos.length} 张图片上传失败，无法被 AI 使用：\n${failedNames}\n\n` +
+          "继续生成的话，这些图片不会出现在最终结果中。\n\n是否继续？",
+      );
+      if (!confirmed) return;
+    }
+
     setError("");
     // 进入生成流程前先清掉旧的重试进度，避免上次的「3/3」残留干扰。
     setAttemptInfo(null);
@@ -498,6 +525,11 @@ function App() {
       {/* 等待 LLM 接口时的全屏「手绘中」遮罩：兔子跳动 + 选中图片轮播，缓解等待焦虑 */}
       {overlayMounted && photos.length > 0 && (
         <DrawingOverlay photos={photos} isLeaving={!isGenerating} attemptInfo={attemptInfo} />
+      )}
+
+      {/* 错误提示弹窗 */}
+      {isErrorAlertOpen && error && (
+        <ErrorAlert message={error} onClose={() => setIsErrorAlertOpen(false)} />
       )}
     </main>
   );

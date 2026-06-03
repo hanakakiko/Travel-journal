@@ -61,6 +61,8 @@ export type PhotoAsset = {
   inferredTags: string[];
   /** 用户提供的可被 Kratos 接口访问的远程链接（本地 blob 无法上传时的兜底）。 */
   remoteUrl?: string;
+  /** 自动上传到云端时的错误信息（如果有的话）。 */
+  uploadError?: string;
 };
 
 export type JournalPage = {

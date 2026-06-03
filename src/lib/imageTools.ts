@@ -130,6 +130,7 @@ export const processImageFile = async (file: File): Promise<PhotoAsset> => {
   //   - 本地解析（尺寸/EXIF/主色）支撑 UI 立刻显示缩略图；
   //   - COS 上传得到的公网 URL 给 LLM/Kratos 作为参考图来源；
   //   - 上传失败时不阻断本地预览，remoteUrl 留空，由 modelClient 兜底处理。
+  let uploadError: Error | null = null;
   const [{ width, height }, exif, color, remoteUrl] = await Promise.all([
     getImageSize(url),
     exifr.parse(file, {
@@ -142,7 +143,8 @@ export const processImageFile = async (file: File): Promise<PhotoAsset> => {
     }).catch(() => ({} as RawExif)),
     averageColor(url).catch(() => "#a87852"),
     uploadToCos(file).catch((error: unknown) => {
-      console.warn("[imageTools] COS 上传失败，将依赖用户手填或兜底链接：", error);
+      uploadError = error instanceof Error ? error : new Error(String(error));
+      console.warn("[imageTools] COS 上传失败，将依赖用户手填或兜底链接：", uploadError);
       return undefined;
     }),
   ]);
@@ -176,6 +178,7 @@ export const processImageFile = async (file: File): Promise<PhotoAsset> => {
     location: location || undefined,
     exifTags,
     remoteUrl,
+    uploadError: uploadError?.message,
   } satisfies Omit<PhotoAsset, "inferredTags">;
 
   return {
