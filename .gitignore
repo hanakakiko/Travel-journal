@@ -31,3 +31,13 @@ yarn-error.log*
 # Misc
 .cache/
 .parcel-cache/
+
+# CoWork Guard 子应用改写相关（内部部署文件，不上传 GitHub）
+exif-guard.zip
+README_GUARD.md
+GUARD_CHANGES.md
+install.sh
+start.sh
+health.sh
+.npmrc
+server.js
