@@ -5,7 +5,7 @@
  *   POST https://maas.devops.xiaohongshu.com/v1/chat/completions
  *   Headers:
  *     Content-Type: application/json
- *     api-key: QSTab73a13e3d1360627adca665ed407478
+ *     api-key: <MAAS_API_KEY>
  *     x-maas-user-email: <用户邮箱>
  *     x-maas-app-id: qs-api
  *   Body:
@@ -22,6 +22,8 @@
  * 上层把多个字段拍平成 ["美食", "暖色", "治愈", "拉花"] 之类的 chips 显示。
  */
 
+import { getApiKey } from "./api-keys.local";
+
 const MAAS_DEBUG = import.meta.env.DEV;
 const vlog = (...args: unknown[]) => {
   if (MAAS_DEBUG) console.info("[VLM]", ...args);
@@ -32,13 +34,11 @@ const MAAS_BASE =
   (import.meta.env.VITE_MAAS_BASE as string | undefined)?.replace(/\/+$/, "") ||
   (import.meta.env.DEV ? "/maas" : "https://maas.devops.xiaohongshu.com");
 
-const MAAS_API_KEY =
-  (import.meta.env.VITE_MAAS_API_KEY as string | undefined) || "QSTab73a13e3d1360627adca665ed407478";
+const MAAS_API_KEY = getApiKey("VITE_MAAS_API_KEY");
 
-const MAAS_USER_EMAIL =
-  (import.meta.env.VITE_MAAS_USER_EMAIL as string | undefined) || "moenzhe@xiaohongshu.com";
+const MAAS_USER_EMAIL = getApiKey("VITE_MAAS_USER_EMAIL");
 
-const MAAS_APP_ID = (import.meta.env.VITE_MAAS_APP_ID as string | undefined) || "qs-api";
+const MAAS_APP_ID = getApiKey("VITE_MAAS_APP_ID") || "qs-api";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
@@ -107,6 +107,19 @@ export const recognizePhotoTags = async (
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<VisionTagResult> => {
   if (!imageUrl) throw new Error("待识别图片 URL 为空");
+  
+  // 检查必要的 API Key 配置
+  if (!MAAS_API_KEY) {
+    throw new Error(
+      "MAAS API Key 未配置。请在 src/lib/api-keys.local.ts 中配置 VITE_MAAS_API_KEY，或联系管理员 叶瑄（丁江颖）获取试用 API Key。"
+    );
+  }
+  if (!MAAS_USER_EMAIL) {
+    throw new Error(
+      "MAAS 用户邮箱未配置。请在 src/lib/api-keys.local.ts 中配置 VITE_MAAS_USER_EMAIL，或联系管理员 叶瑄（丁江颖）。"
+    );
+  }
+
   const endpoint = `${MAAS_BASE}/v1/chat/completions`;
 
   const body = {
@@ -137,8 +150,8 @@ export const recognizePhotoTags = async (
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "api-key": MAAS_API_KEY,
-        "x-maas-user-email": MAAS_USER_EMAIL,
+        "api-key": MAAS_API_KEY!,
+        "x-maas-user-email": MAAS_USER_EMAIL!,
         "x-maas-app-id": MAAS_APP_ID,
       },
       body: JSON.stringify(body),

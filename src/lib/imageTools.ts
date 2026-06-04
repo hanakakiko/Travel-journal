@@ -178,7 +178,7 @@ export const processImageFile = async (file: File): Promise<PhotoAsset> => {
     location: location || undefined,
     exifTags,
     remoteUrl,
-    uploadError: uploadError?.message,
+    uploadError: uploadError ? (uploadError as Error).message : undefined,
   } satisfies Omit<PhotoAsset, "inferredTags">;
 
   return {

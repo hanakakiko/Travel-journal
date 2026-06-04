@@ -1,122 +1,172 @@
-# Guard 子应用快速部署指南
+# 快速开始指南 - QS GPT Image 2
 
-## 🎯 5 分钟快速部署
+## 🚀 5 分钟快速上手
 
-### 第一步：下载应用包
+### 第 1 步：打开配置面板
 
-下载 [`exif-guard.zip`](exif-guard.zip)（217 KB）
+点击应用左上角的 **⚙️ 设置** 按钮
 
-**包含内容**：
-- ✅ 构建产物（`dist/`）
-- ✅ 源代码（`src/`）
-- ✅ 启动脚本（`start.sh`）
-- ✅ 安装脚本（`install.sh`）
-- ✅ 健康检查脚本（`health.sh`）
+### 第 2 步：选择模型
 
-### 第二步：上传到 Guard 平台
-
-1. 登录 Guard 平台
-2. 选择"新建应用"或"更新应用"
-3. 上传 `exif-guard.zip`
-
-### 第三步：配置环境变量
-
-在 Guard 平台的环境变量配置中添加：
-
+在 "选择模型" 下拉菜单中选择：
 ```
-KRATOS_BACKEND=http://kratos-sunyihao.sl.beta.xiaohongshu.com
+QS GPT Image 2
 ```
 
-### 第四步：部署
+### 第 3 步：输入 API Key
 
-点击"部署"按钮，Guard 平台会自动执行：
-- `install.sh` - 检查构建产物
-- `start.sh` - 启动应用
-- `health.sh` - 健康检查
-
-### 第五步：验证
-
-部署后，查看日志：
-
-```bash
-kubectl logs <pod-name> -f
+在 "API Key" 字段中输入你的 API Key：
+```
+QST30bfa2e5f00da0a05e51e07096c2603b
 ```
 
-**预期日志**：
+### 第 4 步：保存配置
+
+点击 "保存配置" 按钮
+
+### 第 5 步：开始生成
+
+1. 上传一张照片
+2. 填写手帐信息
+3. 点击 "装订手帐本"
+4. 等待生成完成（约 20 秒）
+
+## 📋 模型信息速查表
+
+| 项目 | 值 |
+|------|-----|
+| 模型名称 | QS GPT Image 2 |
+| 提供商 | 小红书 QS 平台 |
+| 生成速度 | 中等（约 20 秒） |
+| 质量 | 中等 |
+| 参考图数量 | 1 张 |
+| 支持的宽高比 | 1:1, 16:9, 9:16 |
+| 默认宽高比 | 9:16 |
+| 支持的输出格式 | JPEG, PNG |
+
+## ⚠️ 常见问题
+
+### 出现 "invalid token" 错误？
+
+✅ **解决方案**：
+1. 检查 API Key 是否正确复制
+2. 确认 API Key 是否有效
+3. 检查 API Key 是否有足够的额度
+4. 尝试清除配置后重新配置
+
+### 生成失败？
+
+✅ **解决方案**：
+1. 检查网络连接
+2. 查看浏览器控制台（F12）的错误信息
+3. 尝试刷新页面后重新生成
+4. 检查 API Key 是否有效
+
+### 想切换回其他模型？
+
+✅ **解决方案**：
+1. 打开配置面板
+2. 选择其他模型（GPT-2 或 FLUX.2）
+3. 输入对应的 API Key
+4. 点击 "保存配置"
+
+## 🎯 使用场景
+
+### 场景 1：快速生成手帐
+
 ```
-[install] success
-[start] listening on 0.0.0.0:3000
-[start] Kratos backend: http://kratos-sunyihao.sl.beta.xiaohongshu.com
+1. 选择 QS GPT Image 2（生成速度快）
+2. 上传照片
+3. 填写简单信息
+4. 点击生成
+5. 约 20 秒后获得结果
 ```
 
-## ✅ 部署成功标志
+### 场景 2：高质量输出
 
-- [ ] Pod 状态为 `Running`
-- [ ] 日志中有 `[install] success`
-- [ ] 日志中有 `[start] listening on 0.0.0.0:3000`
-- [ ] 日志中有 `[start] Kratos backend: http://...`
-- [ ] 健康检查返回 `{"status":"ok"}`
+```
+1. 选择 FLUX.2（质量最高）
+2. 上传照片
+3. 详细填写信息
+4. 点击生成
+5. 等待较长时间获得高质量结果
+```
 
-## 🔍 快速诊断
+### 场景 3：快速预览
 
-### 如果部署失败
+```
+1. 选择 GPT-2（最快）
+2. 上传照片
+3. 点击生成
+4. 快速获得预览效果
+```
 
-**错误**：`[install] missing build artifacts: dist/`
-- **原因**：缺少构建产物
-- **解决**：使用最新的 `exif-guard.zip`（217 KB）
+## 💡 最佳实践
 
-**错误**：`502 Bad Gateway`
-- **原因**：反向代理无法连接到 Kratos 后端
-- **解决**：参考 [`KRATOS_502_CHECKLIST.md`](KRATOS_502_CHECKLIST.md)
+### ✅ 推荐做法
 
-**错误**：应用无法访问
-- **原因**：应用未启动或路由配置问题
-- **解决**：查看 Pod 日志，参考 [`DEPLOYMENT_CHECKLIST.md`](DEPLOYMENT_CHECKLIST.md)
+- 使用高质量的参考图片
+- 详细描述你的需求
+- 选择合适的宽高比
+- 定期检查 API Key 的有效性
 
-## 📚 详细文档
+### ❌ 避免做法
 
-| 文档 | 说明 |
-|------|------|
-| [`BUILD_ARTIFACTS_FIX.md`](BUILD_ARTIFACTS_FIX.md) | 构建产物缺失问题修复 |
-| [`DEPLOYMENT_CHECKLIST.md`](DEPLOYMENT_CHECKLIST.md) | 部署检查清单 |
-| [`KRATOS_502_CHECKLIST.md`](KRATOS_502_CHECKLIST.md) | Kratos 502 错误快速检查清单 |
-| [`KRATOS_502_SOLUTION.md`](KRATOS_502_SOLUTION.md) | Kratos 502 错误完整解决方案 |
-| [`README_GUARD.md`](README_GUARD.md) | Guard 改写指南 |
+- 使用过于模糊的参考图片
+- 输入过长或过复杂的 prompt
+- 频繁切换模型
+- 忘记保存配置
 
-## 🚀 预期效果
+## 🔄 模型选择建议
 
-部署成功后，应用应该能够：
+### 选择 GPT-2 如果：
+- 需要快速生成
+- 对质量要求不高
+- 想快速预览效果
 
-1. ✅ 正确启动并监听 3000 端口
-2. ✅ 返回应用首页（HTML）
-3. ✅ 健康检查返回 `{"status":"ok"}`
-4. ✅ 正确转发 Kratos 接口请求
-5. ✅ 生成手帐图片
+### 选择 QS GPT Image 2 如果：
+- 需要中等质量和速度的平衡
+- 想尝试新模型
+- 有稳定的 API Key
 
-## 💡 常见问题
+### 选择 FLUX.2 如果：
+- 需要最高质量的输出
+- 有充足的时间等待
+- 想要最佳的视觉效果
 
-**Q: 为什么需要 `KRATOS_BACKEND` 环境变量？**
-A: 应用需要调用 Kratos 接口生成图片。反向代理会将 `/kratos/` 请求转发到这个后端地址。
+## 📞 获取帮助
 
-**Q: 如果 Kratos 后端地址不同怎么办？**
-A: 修改 `KRATOS_BACKEND` 环境变量为正确的地址。
+### 问题排查步骤
 
-**Q: 应用在哪个路径下运行？**
-A: 应用会挂在 Guard 分配的前缀下（如 `/s/05f7ebb4/`）。应用使用裸路径，由 Guard router 注入前缀。
+1. **检查 API Key**
+   - 确认 API Key 是否正确
+   - 确认 API Key 是否有效
+   - 确认 API Key 是否有足够的额度
 
-**Q: 如何查看应用日志？**
-A: 使用 `kubectl logs <pod-name> -f` 查看 Pod 日志。
+2. **检查网络**
+   - 确认网络连接正常
+   - 尝试刷新页面
+   - 尝试清除浏览器缓存
 
-## 📞 需要帮助？
+3. **查看日志**
+   - 打开浏览器开发者工具（F12）
+   - 查看 Console 标签页的错误信息
+   - 记录错误信息以便排查
 
-如果部署失败，请提供以下信息：
+4. **重置配置**
+   - 打开配置面板
+   - 清除所有配置
+   - 重新输入 API Key
+   - 保存配置
 
-1. **Guard 平台的错误日志**
-2. **Pod 的完整日志**
-3. **环境变量配置**
-4. **Guard 平台的版本和配置**
+## 🎓 学习资源
+
+- 📖 [完整配置指南](QS_GPT_IMAGE_2_SETUP.md)
+- 📖 [实现总结](IMPLEMENTATION_SUMMARY.md)
+- 🔧 [技术文档](src/lib/modelConfig.ts)
 
 ---
 
-**最后更新**：2026-06-03
-**版本**：exif-guard.zip (217 KB)
+**最后更新**: 2024年  
+**版本**: 1.0  
+**状态**: ✅ 完成

@@ -17,6 +17,7 @@
  *   4. **失败处理**：上传失败抛出可读 Error；调用方决定是否阻断本地预览。
  *   5. **CORS**：浏览器直连 PUT 需要 bucket 控制台配置 CORS 规则（允许 PUT + 当前 origin），
  *      代码层面无法绕过，README 已说明。
+ *   6. **图片压缩**：上传前自动压缩图片，减少存储和 token 消耗。
  */
 
 /** 上传基础 URL（含协议、bucket-region 域名，不含末尾斜杠）。 */
@@ -105,7 +106,100 @@ const clog = (...args: unknown[]) => {
 };
 
 /**
+ * 图片压缩配置
+ * - maxWidth/maxHeight: 最大尺寸（超过则缩放）
+ * - quality: JPEG 质量（0-1，默认 0.75）
+ * - maxSizeKB: 目标最大文件大小（KB，默认 500KB）
+ */
+const IMAGE_COMPRESS_CONFIG = {
+  maxWidth: 2048,
+  maxHeight: 2048,
+  quality: 0.75,
+  maxSizeKB: 500,
+};
+
+/**
+ * 将 File 对象压缩为 Blob
+ *
+ * @param file 原始图片文件
+ * @returns 压缩后的 Blob 对象
+ */
+const compressImage = async (file: File): Promise<Blob> => {
+  // 如果是 SVG 或其他矢量格式，不压缩
+  if (file.type === "image/svg+xml") {
+    return file;
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let { width, height } = img;
+
+        // 计算缩放尺寸
+        if (width > IMAGE_COMPRESS_CONFIG.maxWidth || height > IMAGE_COMPRESS_CONFIG.maxHeight) {
+          const ratio = Math.min(
+            IMAGE_COMPRESS_CONFIG.maxWidth / width,
+            IMAGE_COMPRESS_CONFIG.maxHeight / height,
+          );
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("无法获取 canvas 上下文"));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // 根据原始格式选择输出格式和质量
+        const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
+        const quality = file.type === "image/png" ? undefined : IMAGE_COMPRESS_CONFIG.quality;
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error("压缩失败"));
+              return;
+            }
+
+            // 如果压缩后仍然过大，降低质量重试
+            if (
+              outputType === "image/jpeg" &&
+              blob.size > IMAGE_COMPRESS_CONFIG.maxSizeKB * 1024
+            ) {
+              canvas.toBlob(
+                (retryBlob) => {
+                  resolve(retryBlob || blob);
+                },
+                "image/jpeg",
+                Math.max(0.5, IMAGE_COMPRESS_CONFIG.quality - 0.15),
+              );
+            } else {
+              resolve(blob);
+            }
+          },
+          outputType,
+          quality,
+        );
+      };
+      img.onerror = () => reject(new Error("图片加载失败"));
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error("文件读取失败"));
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
  * 把本地 File PUT 上传到 COS，成功返回可被 LLM 访问的公网 URL。
+ * 上传前会自动压缩图片以减少存储和 token 消耗。
  *
  * @param file 浏览器 File 对象（通常来自 <input type="file">）
  * @param timeoutMs 单次上传超时（默认 60s，大图可适当调大）
@@ -113,12 +207,30 @@ const clog = (...args: unknown[]) => {
  */
 export const uploadToCos = async (file: File, timeoutMs: number = DEFAULT_TIMEOUT_MS): Promise<string> => {
   if (!file) throw new Error("待上传文件为空");
+  
+  // 压缩图片
+  let uploadBlob: Blob = file;
+  const originalSize = file.size;
+  try {
+    uploadBlob = await compressImage(file);
+    const compressedSize = uploadBlob.size;
+    const ratio = ((1 - compressedSize / originalSize) * 100).toFixed(1);
+    clog("图片压缩", {
+      original: `${(originalSize / 1024).toFixed(1)}KB`,
+      compressed: `${(compressedSize / 1024).toFixed(1)}KB`,
+      ratio: `${ratio}%`,
+    });
+  } catch (error) {
+    clog("⚠️ 图片压缩失败，使用原始文件", error);
+    // 压缩失败时降级使用原始文件，不中断流程
+  }
+
   const objectKey = buildObjectKey(file);
   const requestUrl = buildRequestUrl(objectKey);
   const publicUrl = buildPublicUrl(objectKey);
   const contentType = file.type || "application/octet-stream";
 
-  clog("PUT →", requestUrl, { size: file.size, type: contentType, viaProxy: USE_DEV_PROXY });
+  clog("PUT →", requestUrl, { size: uploadBlob.size, type: contentType, viaProxy: USE_DEV_PROXY });
 
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -127,8 +239,8 @@ export const uploadToCos = async (file: File, timeoutMs: number = DEFAULT_TIMEOU
     const response = await fetch(requestUrl, {
       method: "PUT",
       headers: { "Content-Type": contentType },
-      // fetch 会把 File 当成 binary body 透传，无需再 ArrayBuffer 转换
-      body: file,
+      // 使用压缩后的 Blob 作为请求体
+      body: uploadBlob,
       signal: controller.signal,
       // 避免代理 / Service Worker 缓存
       cache: "no-store",

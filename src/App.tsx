@@ -19,6 +19,7 @@ import {
 import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from "react";
 import { useEffect, useState } from "react";
 import { ErrorAlert } from "./lib/ErrorAlert";
+import { ApiConfigPanel } from "./lib/ApiConfigPanel";
 import {
   decorationOptions,
   edgeStyleOptions,
@@ -39,7 +40,7 @@ import { createSampleFiles } from "./lib/samplePhotos";
 import { playSound, type SoundEffect } from "./lib/soundEffects";
 import { recognizePhotoBatch } from "./lib/visionClient";
 import type { JournalDraft, PhotoAsset, StyleId, TemplateId, UserAnswers } from "./types";
-import { getAvailableModels } from "./lib/modelConfig";
+import { getAvailableModels, hasApiKeyForModel, MODEL_CONFIGS, type ModelType } from "./lib/modelConfig";
 
 const defaultAnswers: UserAnswers = {
   scene: "一次旅程",
@@ -276,6 +277,16 @@ function App() {
       return;
     }
 
+    // 检查是否有可用的生成模型
+    const availableModels = getAvailableModels();
+    if (availableModels.length === 0) {
+      setError(
+        "还没有配置任何生成模型。请在 src/lib/api-keys.local.ts 中配置至少一个模型的 API Key，或联系管理员 叶瑄（丁江颖）获取试用 API Key。"
+      );
+      setIsErrorAlertOpen(true);
+      return;
+    }
+
     // 检查是否有上传失败的图片
     const failedPhotos = photos.filter((p) => !p.remoteUrl);
     if (failedPhotos.length > 0) {
@@ -345,16 +356,19 @@ function App() {
   return (
     <main className={classNames("app", draft ? "has-draft" : false, `style-${activeStyle}`, `template-${templateId}`)}>
       <section className="upload-band">
-        <button
-          className={classNames("sound-toggle", soundEnabled && "is-on")}
-          type="button"
-          aria-pressed={soundEnabled}
-          aria-label={soundEnabled ? "关闭声音" : "打开声音"}
-          title={soundEnabled ? "关闭声音" : "打开声音"}
-          onClick={toggleSound}
-        >
-          {soundEnabled ? <Volume2 size={19} /> : <VolumeX size={19} />}
-        </button>
+         <div className="upload-band-controls">
+           <button
+             className={classNames("sound-toggle", soundEnabled && "is-on")}
+             type="button"
+             aria-pressed={soundEnabled}
+             aria-label={soundEnabled ? "关闭声音" : "打开声音"}
+             title={soundEnabled ? "关闭声音" : "打开声音"}
+             onClick={toggleSound}
+           >
+             {soundEnabled ? <Volume2 size={19} /> : <VolumeX size={19} />}
+           </button>
+           <ApiConfigPanel />
+         </div>
         <div className="upload-studio">
           <div className="studio-preview" aria-hidden="true">
             <div className="post-scene atelier-scene">
@@ -420,7 +434,7 @@ function App() {
           <div className="studio-actions">
             <div className="studio-title">
               <p>今天的画稿</p>
-              <h2>{photos.length ? `${photos.length} 张画面铺好啦` : "让小兔画进手帐"}</h2>
+              <h2>{photos.length ? `${photos.filter((p) => p.remoteUrl).length} 张画面铺好啦` : "让小兔画进手帐"}</h2>
             </div>
 
             <div className="atelier-note" aria-live="polite">
@@ -693,6 +707,55 @@ function InfoModal({
         </header>
 
         <div className="modal-scroll">
+          {/* 生成模型选择 - 放在最上方 */}
+          <section className="control-band modal-panel">
+            <div className="control-row">
+              <div className="band-heading">
+                <span>
+                  <Sparkles size={17} />
+                  生成模型
+                </span>
+              </div>
+              <div className="segmented">
+                {(Object.keys(MODEL_CONFIGS) as ModelType[])
+                  .filter((id) => id !== "other")
+                  .map((modelId) => {
+                    const config = MODEL_CONFIGS[modelId];
+                    const hasConfig = hasApiKeyForModel(modelId);
+                    return (
+                      <button
+                        key={modelId}
+                        className={classNames(
+                          answers.selectedModel === modelId && "is-active",
+                          !hasConfig && "is-disabled"
+                        )}
+                        type="button"
+                        onClick={() => {
+                          if (hasConfig) {
+                            onSound("tap");
+                            onSetAnswers((current) => ({ ...current, selectedModel: modelId }));
+                          }
+                        }}
+                        disabled={!hasConfig}
+                        title={hasConfig ? config.description : `未配置 ${config.name} 的 API Key`}
+                      >
+                        {config.name}
+                        {!hasConfig && <span className="model-unconfigured-badge">未配置</span>}
+                      </button>
+                    );
+                  })}
+              </div>
+              {getAvailableModels().length === 0 && (
+                <div style={{ padding: "1em", backgroundColor: "#fff3cd", borderRadius: "0.5em", color: "#856404", marginTop: "0.5em" }}>
+                  <p style={{ margin: "0 0 0.5em 0", fontWeight: "bold" }}>⚠️ 还没有配置任何生成模型</p>
+                  <p style={{ margin: "0 0 0.5em 0" }}>
+                    请点击右上角的 API 配置按钮，为至少一个模型配置 API Key，或联系管理员 <strong>叶瑄（丁江颖）</strong> 获取试用 API Key。
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+
           <section className="dialogue-band modal-panel">
             {/* 「手帐标题」作为开场输入，替代原"补充画册信息"位置 */}
             <label className="title-input title-input-hero">
@@ -749,31 +812,6 @@ function InfoModal({
           />
 
           <section className="control-band modal-panel">
-            <div className="control-row">
-              <div className="band-heading">
-                <span>
-                  <Sparkles size={17} />
-                  生成模型
-                </span>
-              </div>
-              <div className="segmented">
-                {getAvailableModels().map((model) => (
-                  <button
-                    key={model.id}
-                    className={classNames(answers.selectedModel === model.id && "is-active")}
-                    type="button"
-                    onClick={() => {
-                      onSound("tap");
-                      onSetAnswers((current) => ({ ...current, selectedModel: model.id }));
-                    }}
-                    title={model.description}
-                  >
-                    {model.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="control-row">
               <div className="band-heading">
                 <span>
@@ -879,7 +917,7 @@ function InfoModal({
 
             <details className="prompt-preview">
               <summary>预览本次发给 LLM 的 prompt</summary>
-              <p>{buildKratosPrompt(answers, styleId, templateId, photos.length, photos.map((p) => p.id))}</p>
+              <p>{buildKratosPrompt(answers, styleId, templateId, photos.filter((p) => p.remoteUrl).length, photos.map((p) => p.id))}</p>
             </details>
           </section>
         </div>

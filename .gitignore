@@ -11,6 +11,9 @@ build/
 .env.local
 .env.*.local
 
+# Local API Key configuration (development only)
+src/lib/api-keys.local.ts
+
 # IDE
 .vscode/
 .idea/

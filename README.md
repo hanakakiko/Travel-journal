@@ -25,6 +25,61 @@ http://localhost:5173
 
 手机预览时，让手机和电脑处在同一网络，打开 Vite 输出的 Network 地址。
 
+## API Key 配置
+
+本项目支持多个 AI 模型，需要配置相应的 API Key。支持三种配置方式（优先级从高到低）：
+
+### 1. 本地配置文件（推荐开发时使用）
+
+复制 `src/lib/api-keys.local.ts` 文件（如果还没有的话），在其中填入你的 API Key：
+
+```typescript
+export const API_KEYS_CONFIG = {
+  VITE_KRATOS_API_TOKEN: "your-kratos-api-key",
+  VITE_REPLICATE_API_TOKEN: "your-replicate-api-token",
+  VITE_QS_GPT_IMAGE_2_API_KEY: "your-qs-gpt-image-2-api-key",
+  VITE_MAAS_API_KEY: "your-maas-api-key",
+  // ... 其他配置
+};
+```
+
+**注意**：此文件已在 `.gitignore` 中，不会被提交到版本控制。
+
+### 2. 环境变量（推荐生产环境使用）
+
+在 `.env` 或 `.env.local` 文件中配置：
+
+```bash
+VITE_KRATOS_API_TOKEN=your-kratos-api-token
+VITE_REPLICATE_API_TOKEN=your-replicate-api-token
+VITE_QS_GPT_IMAGE_2_API_KEY=your-qs-gpt-image-2-api-key
+VITE_MAAS_API_KEY=your-maas-api-key
+```
+
+或在启动时传入：
+
+```bash
+VITE_KRATOS_API_TOKEN=xxx npm run dev
+```
+
+### 3. UI 配置面板
+
+在应用中点击右上角的 API 配置按钮，输入你的 API Key。此方式会将配置存储在浏览器的 localStorage 中。
+
+### 支持的模型
+
+| 模型 | 环境变量 | 获取方式 |
+|---|---|---|
+| GPT-2 (Kratos) | `VITE_KRATOS_API_TOKEN` | 联系管理员 叶瑄（丁江颖） |
+| FLUX.2 Pro (Replicate) | `VITE_REPLICATE_API_TOKEN` | https://replicate.com/account/api-tokens |
+| QS GPT Image 2 | `VITE_QS_GPT_IMAGE_2_API_KEY` | 联系管理员 叶瑄（丁江颖） |
+| 视觉大模型 (qwen3-vl) | `VITE_MAAS_API_KEY` | 联系管理员 叶瑄（丁江颖） |
+
+### 模型可用性
+
+- 只有配置了 API Key 的模型才会在「生成模型」下拉菜单中显示
+- 如果没有配置任何模型的 API Key，应用会提示需要先配置或联系管理员
+
 ## Kratos LLM 接入（默认开启）
 
 点击「装订手帐本」时，前端会按下方流程触发 Kratos 的 `UnifiedPic2PicAction`，用返回的图片替换右侧默认拼贴模板：

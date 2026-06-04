@@ -5,7 +5,7 @@
 
 import type { ModelType } from "./modelConfig";
 import { getModelConfig } from "./modelConfig";
-import { callFlux2ProPic2Pic, callKratosUnifiedPic2Pic } from "./modelClient";
+import { callFlux2ProPic2Pic, callKratosUnifiedPic2Pic, callQsGptImage2 } from "./modelClient";
 import type { KratosAttemptInfo } from "./modelClient";
 
 export interface ModelCallParams {
@@ -55,6 +55,19 @@ export const callModelAPI = async (
         targetWidth: params.targetWidth,
         targetHeight: params.targetHeight,
         modelType: "gpt2",
+        timeoutMs: params.timeoutMs,
+        maxAttempts: params.maxAttempts,
+        retryDelayMs: params.retryDelayMs,
+        onAttempt: params.onAttempt,
+      });
+
+    case "qs-gpt-image-2":
+      // QS GPT Image 2 通过 QS API
+      return await callQsGptImage2({
+        prompt: params.prompt,
+        imageUrls: params.imageUrls,
+        targetWidth: params.targetWidth,
+        targetHeight: params.targetHeight,
         timeoutMs: params.timeoutMs,
         maxAttempts: params.maxAttempts,
         retryDelayMs: params.retryDelayMs,

@@ -2,6 +2,8 @@ import { edgeStyleOptions, sceneOptions, stylePresets, templatePresets } from ".
 import type { JournalDraft, JournalPage, PhotoAsset, StyleId, TemplateId, UserAnswers } from "../types";
 import { formatDate } from "./format";
 import { callModelAPI } from "./modelRouter";
+import { loadUserApiConfig } from "./userApiConfig";
+import { getApiKey } from "./api-keys.local";
 
 /** 控制 console 调试日志开关：开发模式默认开。 */
 const DEBUG_ENABLED = import.meta.env.DEV;
@@ -558,45 +560,55 @@ const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(r
  * 拆出来是为了让上层 `callKratosUnifiedPic2Pic` 专注做「重试编排」。
  */
 const callKratosUnifiedPic2PicOnce = async ({
-  prompt,
-  imageUrls,
-  targetWidth = DEFAULT_GEN_WIDTH,
-  targetHeight = DEFAULT_GEN_HEIGHT,
-  modelType = "gpt2",
-  timeoutMs = 300_000,
-}: Omit<KratosPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
-  // 优先使用环境变量；本地开发默认走 /kratos 代理（vite 已配置）。
-  const endpoint =
-    (import.meta.env.VITE_KRATOS_ACTION_URL as string | undefined) ?? "/kratos/ads/materialcenter/doaction";
+   prompt,
+   imageUrls,
+   targetWidth = DEFAULT_GEN_WIDTH,
+   targetHeight = DEFAULT_GEN_HEIGHT,
+   modelType = "gpt2",
+   timeoutMs = 300_000,
+ }: Omit<KratosPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
+   // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件；本地开发默认走 /kratos 代理（vite 已配置）。
+    const userConfigs = loadUserApiConfig();
+    const userGpt2Config = userConfigs?.["gpt-2"];
+    const endpoint = userGpt2Config?.customEndpoint
+      ? userGpt2Config.customEndpoint
+      : ((import.meta.env.VITE_KRATOS_ACTION_URL as string | undefined) ?? getApiKey("VITE_KRATOS_ACTION_URL") ?? "/kratos/ads/materialcenter/doaction");
 
-  const body = {
-    tabName: "material_analysis_tab",
-    actionCode: "UnifiedPic2PicAction",
-    paramsMap: {
-      prompt,
-      modelType,
-      imageUrls,
-      targetWidth: String(targetWidth),
-      targetHeight: String(targetHeight),
-    },
-  };
+   const body = {
+     tabName: "material_analysis_tab",
+     actionCode: "UnifiedPic2PicAction",
+     paramsMap: {
+       prompt,
+       modelType,
+       imageUrls,
+       targetWidth: String(targetWidth),
+       targetHeight: String(targetHeight),
+     },
+   };
 
-  const glog = createModelLogger("GPT-2");
-  glog("request →", endpoint);
-  glog("  modelType:", modelType);
-  glog("  prompt:", prompt.slice(0, 100) + "...");
-  glog("  imageUrls:", imageUrls.length, "张图片");
-  glog("  targetWidth:", targetWidth);
-  glog("  targetHeight:", targetHeight);
-  glog("=== 完整请求体 ===");
-  glog(JSON.stringify(body, null, 2));
+   const glog = createModelLogger("GPT-2");
+   glog("request →", endpoint);
+   glog("  modelType:", modelType);
+   glog("  prompt:", prompt.slice(0, 100) + "...");
+   glog("  imageUrls:", imageUrls.length, "张图片");
+   glog("  targetWidth:", targetWidth);
+   glog("  targetHeight:", targetHeight);
+   glog("=== 完整请求体 ===");
+   glog(JSON.stringify(body, null, 2));
+
+   // 构建请求头，如果用户提供了 API Key 或本地配置了 API Key 则添加到请求头中
+   const headers: Record<string, string> = { "Content-Type": "application/json" };
+   const kratosApiKey = userGpt2Config?.apiKey || getApiKey("VITE_KRATOS_API_TOKEN");
+   if (kratosApiKey) {
+     headers["Authorization"] = `Bearer ${kratosApiKey}`;
+   }
 
   const response = await fetchWithTimeout(
     "GPT-2 接口",
     endpoint,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(body),
     },
     timeoutMs,
@@ -696,24 +708,27 @@ export const callKratosUnifiedPic2Pic = async ({
  * 拆出来是为了让上层 `callFlux2ProPic2Pic` 专注做「重试编排」。
  */
 const callFlux2ProPic2PicOnce = async ({
-  prompt,
-  imageUrls,
-  targetWidth = DEFAULT_GEN_WIDTH,
-  targetHeight = DEFAULT_GEN_HEIGHT,
-  timeoutMs = 300_000,
-}: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
-  // Replicate API 端点（通过本地代理避免 CORS）
-  const endpoint = "/replicate/v1/predictions";
-  
-  // 从环境变量获取 API 密钥
-  const apiToken = import.meta.env.VITE_REPLICATE_API_TOKEN as string | undefined;
-  
-  if (!apiToken) {
-    throw new Error(
-      "FLUX.2 [pro] API Token 未配置。请在 .env 文件中设置 VITE_REPLICATE_API_TOKEN，" +
-      "或参考 .env.example 文件进行配置。"
-    );
-  }
+   prompt,
+   imageUrls,
+   targetWidth = DEFAULT_GEN_WIDTH,
+   targetHeight = DEFAULT_GEN_HEIGHT,
+   timeoutMs = 300_000,
+ }: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
+   // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件
+   const userConfigs = loadUserApiConfig();
+   const userFlux2Config = userConfigs?.["flux-2-pro"];
+   const apiToken = userFlux2Config?.apiKey || getApiKey("VITE_REPLICATE_API_TOKEN");
+   
+   if (!apiToken) {
+     throw new Error(
+       "FLUX.2 [pro] API Token 未配置。请在 src/lib/api-keys.local.ts 中配置 VITE_REPLICATE_API_TOKEN，" +
+       "或在 API 配置面板中输入你的 Replicate API Token，" +
+       "或在 .env 文件中设置 VITE_REPLICATE_API_TOKEN。"
+     );
+   }
+
+   // 使用用户自定义端点或默认端点
+   const endpoint = userFlux2Config?.customEndpoint || "/replicate/v1/predictions";
 
   // 构建参考图参数（FLUX.2 支持最多 8 张）
   // 根据 Replicate API schema，参考图参数是 input_images，它是一个数组
@@ -914,6 +929,254 @@ export const callFlux2ProPic2Pic = async ({
 
   // 理论不可达：循环内要么 return 要么 throw
   throw lastError ?? new Error("FLUX.2 [pro] API 调用失败");
+};
+
+/**
+ * 单次调用 QS GPT Image 2 API，不带重试。
+ */
+const callQsGptImage2Once = async ({
+  prompt,
+  imageUrls,
+  targetWidth = DEFAULT_GEN_WIDTH,
+  targetHeight = DEFAULT_GEN_HEIGHT,
+  timeoutMs = 300_000,
+}: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
+  // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件
+  const userConfigs = loadUserApiConfig();
+  const userQsConfig = userConfigs?.["qs-gpt-image-2"];
+  const apiKey = userQsConfig?.apiKey || getApiKey("VITE_QS_GPT_IMAGE_2_API_KEY");
+
+  if (!apiKey) {
+    throw new Error(
+      "QS GPT Image 2 API Key 未配置。请在 src/lib/api-keys.local.ts 中配置 VITE_QS_GPT_IMAGE_2_API_KEY，" +
+      "或在 API 配置面板中输入你的 API Key，" +
+      "或在 .env 文件中设置 VITE_QS_GPT_IMAGE_2_API_KEY。"
+    );
+  }
+
+  // 使用用户自定义端点或默认端点
+  const endpoint = userQsConfig?.customEndpoint || "https://maas.devops.rednote.life/openai/openai/images/edits?api-version=2025-04-01-preview";
+
+  const qlog = createModelLogger("QS GPT Image 2");
+
+  // 获取参考图片 URLs
+  const imageUrlList: string[] = [];
+  if (imageUrls && imageUrls.length > 0) {
+    for (let i = 0; i < imageUrls.length; i++) {
+      imageUrlList.push(imageUrls[i]);
+      qlog(`✓ 参考图片 ${i + 1}: ${imageUrls[i].slice(0, 80)}...`);
+    }
+  }
+
+  qlog("request →", endpoint);
+  qlog("  model: gpt-image-2");
+  qlog("  prompt:", prompt.slice(0, 100) + "...");
+  qlog("  size:", `${targetWidth}x${targetHeight}`);
+  qlog("  response_format: b64_json");
+  qlog(`  images: ${imageUrlList.length} 张`);
+
+  // 使用 FormData API 构建 multipart/form-data 请求体
+  const formData = new FormData();
+
+  // 添加多个 image 字段（支持多张图片）- 作为字符串 URL
+  for (let i = 0; i < imageUrlList.length; i++) {
+    formData.append("image", imageUrlList[i]);
+  }
+
+  // 添加其他字段
+  formData.append("prompt", prompt);
+  formData.append("model", "gpt-image-2");
+  formData.append("size", `${targetWidth}x${targetHeight}`);
+  formData.append("response_format", "b64_json");
+
+  // 打印完整的请求体信息
+  qlog("=== 完整请求体 (multipart/form-data) ===");
+  qlog(`  images: ${imageUrlList.length} 张`);
+  qlog(`  prompt 长度: ${prompt.length} 字符`);
+  qlog(`  model: gpt-image-2`);
+  qlog(`  size: ${targetWidth}x${targetHeight}`);
+  qlog(`  response_format: b64_json`);
+
+  // 打印实际发送的请求信息（用于调试）
+  qlog("=== 实际发送的请求信息 ===");
+  qlog(`  URL: ${endpoint}`);
+  qlog(`  Method: POST`);
+  qlog(`  Headers:`);
+  qlog(`    Authorization: Bearer ${apiKey.slice(0, 10)}...${apiKey.slice(-10)}`);
+  qlog(`    Content-Type: multipart/form-data (自动设置)`);
+  qlog(`  Body 字段:`);
+  for (let i = 0; i < imageUrlList.length; i++) {
+    qlog(`    - image[${i + 1}]: ${imageUrlList[i].slice(0, 80)}...`);
+  }
+  qlog(`    - prompt: ${prompt.length} 字符`);
+  qlog(`    - model: gpt-image-2`);
+  qlog(`    - size: ${targetWidth}x${targetHeight}`);
+  qlog(`    - response_format: b64_json`);
+
+  // 生成完整的 curl 命令用于调试
+  qlog("=== 完整 curl 命令 ===");
+  let curlCmd = `curl --location '${endpoint}' \\
+  --header 'Authorization: Bearer ${apiKey}' \\`;
+  for (let i = 0; i < imageUrlList.length; i++) {
+    curlCmd += `\n  --form 'image="${imageUrlList[i]}"' \\`;
+  }
+  curlCmd += `\n  --form 'prompt="${prompt.replace(/"/g, '\\"')}"' \\
+  --form 'model="gpt-image-2"' \\
+  --form 'size="${targetWidth}x${targetHeight}"' \\
+  --form 'response_format="b64_json"'`;
+  qlog(curlCmd);
+
+  const response = await fetchWithTimeout(
+    "QS GPT Image 2 API",
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        // 不设置 Content-Type，让浏览器自动处理 FormData
+      },
+      body: formData,
+    },
+    timeoutMs,
+  );
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    qlog("← HTTP error", response.status, text);
+    throw new Error(`QS GPT Image 2 API 返回 HTTP ${response.status}${text ? `：${text.slice(0, 160)}` : ""}`);
+  }
+
+  let payload: unknown;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    qlog("← non-JSON body", text);
+    throw new Error(`QS GPT Image 2 API 返回非 JSON：${text.slice(0, 160)}`);
+  }
+
+  qlog("← response", payload);
+  qlog("=== 完整响应体 ===");
+  qlog(JSON.stringify(payload, null, 2));
+
+  // 打印响应格式信息
+  if (payload && typeof payload === "object") {
+    const payloadObj = payload as Record<string, unknown>;
+    qlog("=== 响应格式分析 ===");
+    qlog(`  created: ${payloadObj.created ?? "未找到"}`);
+    qlog(`  data 数组长度: ${Array.isArray(payloadObj.data) ? (payloadObj.data as any[]).length : "未找到"}`);
+    if (Array.isArray(payloadObj.data) && (payloadObj.data as any[]).length > 0) {
+      const firstData = (payloadObj.data as any[])[0];
+      qlog(`  data[0] 字段: ${Object.keys(firstData).join(", ")}`);
+      if ("b64_json" in firstData) {
+        const b64Str = firstData.b64_json as string;
+        qlog(`  data[0].b64_json 长度: ${b64Str.length} 字符`);
+      }
+      if ("url" in firstData) {
+        qlog(`  data[0].url: ${(firstData.url as string).slice(0, 80)}...`);
+      }
+    }
+    if ("usage" in payloadObj) {
+      const usage = payloadObj.usage as Record<string, unknown>;
+      qlog(`  usage.total_tokens: ${usage.total_tokens ?? "未找到"}`);
+    }
+  }
+
+  // 提取生成的图片 URL
+  let generatedImageUrl: string | null = null;
+  
+  // 尝试从 data[0].url 提取 URL
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "data" in payload &&
+    Array.isArray((payload as any).data) &&
+    (payload as any).data.length > 0 &&
+    "url" in (payload as any).data[0]
+  ) {
+    const url = (payload as any).data[0].url;
+    if (typeof url === "string") {
+      generatedImageUrl = url;
+      qlog(`✓ 生成成功，图片 URL: ${url.slice(0, 80)}...`);
+    }
+  }
+  
+  // 如果没有找到 URL，尝试查找 base64 数据
+  if (!generatedImageUrl) {
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "data" in payload &&
+      Array.isArray((payload as any).data) &&
+      (payload as any).data.length > 0 &&
+      "b64_json" in (payload as any).data[0]
+    ) {
+      const b64Data = (payload as any).data[0].b64_json;
+      if (typeof b64Data === "string") {
+        // 将 base64 转换为 data URL
+        generatedImageUrl = `data:image/jpeg;base64,${b64Data}`;
+        qlog(`✓ 生成成功，图片已转换为 data URL (${b64Data.length} 字符)`);
+      }
+    }
+  }
+  
+  // 如果还是没有找到，尝试其他可能的字段
+  if (!generatedImageUrl) {
+    generatedImageUrl = extractGeneratedImageUrl(payload);
+  }
+  
+  if (!generatedImageUrl) {
+    throw new Error("QS GPT Image 2 API 未在返回结构中找到图片链接或 base64 数据（已在控制台打印 raw response，请确认字段路径）");
+  }
+
+  qlog(`✓ 生成成功，图片 URL: ${generatedImageUrl.slice(0, 80)}...`);
+  return { imageUrl: generatedImageUrl, raw: payload };
+};
+
+/**
+ * 调用 QS GPT Image 2 API（自动重试版）。
+ */
+export const callQsGptImage2 = async ({
+  maxAttempts = 3,
+  retryDelayMs = 1500,
+  onAttempt,
+  ...rest
+}: Flux2ProPic2PicParams) => {
+  const total = Math.max(1, maxAttempts);
+  let lastError: Error | undefined;
+  const qlog = createModelLogger("QS GPT Image 2");
+
+  for (let attempt = 1; attempt <= total; attempt++) {
+    onAttempt?.({ attempt, totalAttempts: total, lastError });
+
+    try {
+      const result = await callQsGptImage2Once(rest);
+      if (attempt > 1) qlog(`✓ succeeded on attempt ${attempt}/${total}`);
+      return result;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const retryable = isRetryableKratosError(lastError);
+      const isLast = attempt >= total;
+
+      qlog(
+        `× attempt ${attempt}/${total} failed`,
+        { retryable, isLast, message: lastError.message },
+      );
+
+      if (isLast || !retryable) {
+        if (attempt > 1) {
+          throw new Error(`${lastError.message}（已重试 ${attempt - 1} 次仍失败）`);
+        }
+        throw lastError;
+      }
+
+      const waitMs = retryDelayMs * attempt;
+      qlog(`… waiting ${waitMs}ms before next retry`);
+      await sleep(waitMs);
+    }
+  }
+
+  throw lastError ?? new Error("QS GPT Image 2 API 调用失败");
 };
 
 /**
