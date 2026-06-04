@@ -4222,11 +4222,29 @@ label:focus-within {
 }
 
 .error-alert-action:active {
-  transform: translateY(0);
-  box-shadow: 2px 3px 0 rgba(23, 18, 15, 0.1);
-}
+   transform: translateY(0);
+   box-shadow: 2px 3px 0 rgba(23, 18, 15, 0.1);
+ }
 
-/* 移动端适配 */
+ /* 重试按钮样式 */
+ .error-alert-retry {
+   background: var(--accent-main);
+   color: var(--ink);
+   border-color: var(--ink);
+ }
+
+ .error-alert-retry:hover {
+   background: #ffc700;
+   transform: translateY(-2px);
+   box-shadow: 6px 7px 0 rgba(23, 18, 15, 0.12);
+ }
+
+ .error-alert-retry:active {
+   transform: translateY(0);
+   box-shadow: 2px 3px 0 rgba(23, 18, 15, 0.1);
+ }
+
+ /* 移动端适配 */
 @media (max-width: 480px) {
   .error-alert-container {
     width: 92%;

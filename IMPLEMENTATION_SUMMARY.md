@@ -1,269 +1,204 @@
-# QS GPT Image 2 模型实现总结
+# COS 图片上传失败重试功能 - 实现总结
 
-## 📋 概述
+## 需求
+第一步图片上传 COS 失败的弹窗，直接放一个重试按钮，把这些失败的再传一遍。
 
-成功为手帐生成应用添加了对小红书 QS 平台 **GPT Image 2** 模型的支持。这是一个新的图生图模型，可以作为 FLUX.2 和 GPT-2 的替代方案。
+## 实现方案
 
-## 🎯 实现目标
+### 核心思路
+1. **记录失败图片**：当上传失败时，将失败的图片保存到状态中
+2. **显示重试按钮**：在错误提示弹窗中显示重试按钮
+3. **重新处理失败图片**：点击重试时，重新调用图片处理流程
+4. **更新图片列表**：用新的处理结果替换失败的图片
 
-✅ 添加新的模型类型 `qs-gpt-image-2`  
-✅ 实现 QS API 调用逻辑  
-✅ 支持用户自定义 API Key  
-✅ 支持自定义端点  
-✅ 完整的错误处理和日志记录  
-✅ TypeScript 类型安全  
-✅ 构建成功，无编译错误  
+### 修改的文件
 
-## 📝 修改的文件
+#### 1. `src/lib/ErrorAlert.tsx`
+**变更：**
+- 添加 `onRetry?: () => void` 属性到 `ErrorAlertProps` 类型
+- 在 footer 中条件渲染重试按钮
+- 关闭按钮文案根据是否有重试按钮动态变化
 
-### 1. [`src/lib/modelConfig.ts`](src/lib/modelConfig.ts)
-
-**变更内容**：
-- 更新 `ModelType` 类型，添加 `"qs-gpt-image-2"`
-- 添加新的模型配置对象 `QS_GPT_IMAGE_2_CONFIG`
-
-**关键配置**：
+**代码片段：**
 ```typescript
-export const QS_GPT_IMAGE_2_CONFIG = {
-  id: "qs-gpt-image-2",
-  name: "QS GPT Image 2",
-  endpoint: "https://maas.devops.rednote.life/openai/openai/images/generations?api-version=2025-04-01-preview",
-  apiKeyEnvVar: "VITE_QS_GPT_IMAGE_2_API_KEY",
-  // ... 其他配置
-} as const;
-```
-
-### 2. [`src/lib/userApiConfig.ts`](src/lib/userApiConfig.ts)
-
-**变更内容**：
-- 更新 `UserApiConfig` 类型，添加 `"qs-gpt-image-2"` 到 `modelType` 联合类型
-- 修复 `isValidApiKey()` 函数的返回类型
-
-**关键类型**：
-```typescript
-export type UserApiConfig = {
-  modelType: "gpt-2" | "flux-2-pro" | "qs-gpt-image-2";
-  apiKey: string;
-  customEndpoint?: string;
+export type ErrorAlertProps = {
+  message: string;
+  onClose: () => void;
+  autoCloseDuration?: number;
+  onRetry?: () => void;  // 新增
 };
+
+// 在 footer 中
+<div className="error-alert-footer">
+  {onRetry && (
+    <button className="error-alert-action error-alert-retry" onClick={onRetry}>
+      重试上传
+    </button>
+  )}
+  <button className="error-alert-action" onClick={handleClose}>
+    {onRetry ? "关闭" : "我知道了"}
+  </button>
+</div>
 ```
 
-### 3. [`src/lib/modelClient.ts`](src/lib/modelClient.ts)
+#### 2. `src/App.tsx`
+**变更：**
+- 添加 `failedPhotosForRetry` 状态来记录失败的图片
+- 在 `processFiles()` 中，当检测到上传失败时，保存失败的图片
+- 添加 `retryFailedPhotos()` 函数实现重试逻辑
+- 在错误提示弹窗中传入 `onRetry` 回调
 
-**变更内容**：
-- 添加 `callQsGptImage2Once()` 函数：单次调用 QS GPT Image 2 API
-- 添加 `callQsGptImage2()` 函数：带重试机制的 API 调用
-- 支持用户自定义 API Key 和端点
-- 使用 `api-key` 请求头而不是 `Authorization`
-
-**关键实现**：
+**新增状态：**
 ```typescript
-const callQsGptImage2Once = async ({
-  prompt,
-  imageUrls,
-  targetWidth = DEFAULT_GEN_WIDTH,
-  targetHeight = DEFAULT_GEN_HEIGHT,
-  timeoutMs = 300_000,
-}: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
-  // 优先使用用户提供的 API Key，其次使用环境变量
-  const userConfig = loadUserApiConfig();
-  const apiKey = (userConfig as any)?.modelType === "qs-gpt-image-2"
-    ? userConfig!.apiKey
-    : (import.meta.env.VITE_QS_GPT_IMAGE_2_API_KEY as string | undefined);
-
-  // 使用用户自定义端点或默认端点
-  const endpoint = (userConfig as any)?.modelType === "qs-gpt-image-2" && userConfig?.customEndpoint
-    ? userConfig.customEndpoint
-    : "https://maas.devops.rednote.life/openai/openai/images/generations?api-version=2025-04-01-preview";
-
-  // 构建请求体 - QS API 的格式
-  const body = {
-    model: "gpt-image-2",
-    prompt,
-    n: 1,
-    size: `${targetWidth}x${targetHeight}`,
-    quality: "high",
-    output_format: "jpeg",
-    output_compression: 85,
-  };
-
-  // 发送请求，使用 api-key 请求头
-  const response = await fetchWithTimeout(
-    "QS GPT Image 2 API",
-    endpoint,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "api-key": apiKey,
-      },
-      body: JSON.stringify(body),
-    },
-    timeoutMs,
-  );
-  // ...
-};
+const [failedPhotosForRetry, setFailedPhotosForRetry] = useState<PhotoAsset[]>([]);
 ```
 
-### 4. [`src/lib/modelRouter.ts`](src/lib/modelRouter.ts)
-
-**变更内容**：
-- 导入 `callQsGptImage2` 函数
-- 添加 `case "qs-gpt-image-2"` 分支来路由到新的 API 调用函数
-
-**关键路由**：
+**新增函数：`retryFailedPhotos()`**
 ```typescript
-case "qs-gpt-image-2":
-  return callQsGptImage2(params);
-```
+const retryFailedPhotos = async () => {
+  if (!failedPhotosForRetry.length) return;
+  setError("");
+  setIsErrorAlertOpen(false);
+  setIsProcessing(true);
+  try {
+    // 1. 从失败的图片中提取原始 File 对象（通过 blob 重建）
+    const retryFiles = await Promise.all(
+      failedPhotosForRetry.map(async (photo) => {
+        const response = await fetch(photo.url);
+        const blob = await response.blob();
+        return new File([blob], photo.fileName, { type: blob.type });
+      })
+    );
 
-### 5. [`src/lib/ApiConfigPanel.tsx`](src/lib/ApiConfigPanel.tsx)
+    // 2. 重新处理这些文件
+    const reprocessed = await Promise.all(retryFiles.map(processImageFile));
 
-**变更内容**：
-- 更新 `modelType` 状态类型，添加 `"qs-gpt-image-2"`
-- 在模型选择下拉菜单中添加 "QS GPT Image 2" 选项
-- 更新 API Key 输入框的 placeholder 文本
-- 更新提示文本以显示不同模型的要求
+    // 3. 更新 photos 数组：用新的处理结果替换对应的失败图片
+    setPhotos((current) => {
+      const next = [...current];
+      reprocessed.forEach((newPhoto) => {
+        const index = next.findIndex((p) => p.fileName === newPhoto.fileName);
+        if (index >= 0) {
+          next[index] = newPhoto;
+        }
+      });
+      return next;
+    });
 
-**关键 UI 更新**：
-```typescript
-<option value="qs-gpt-image-2">QS GPT Image 2</option>
-```
-
-### 6. [`src/lib/imageTools.ts`](src/lib/imageTools.ts)
-
-**变更内容**：
-- 修复 TypeScript 类型错误：`uploadError` 的类型推断问题
-
-## 🔑 API 认证方式
-
-### QS GPT Image 2 API 特点
-
-- **认证方式**：请求头 `api-key: <your-key>`（不是 `Authorization`）
-- **请求格式**：
-  ```json
-  {
-    "model": "gpt-image-2",
-    "prompt": "...",
-    "n": 1,
-    "size": "1024x1536",
-    "quality": "high",
-    "output_format": "jpeg",
-    "output_compression": 85
+    // 4. 检查是否还有失败的
+    const stillFailed = reprocessed.filter((photo) => !photo.remoteUrl);
+    if (stillFailed.length > 0) {
+      // 仍有失败，显示新的错误提示，保留重试按钮
+      setError(...);
+      setFailedPhotosForRetry(stillFailed);
+      setIsErrorAlertOpen(true);
+    } else {
+      // 全部成功
+      setFailedPhotosForRetry([]);
+      play("success");
+    }
+  } catch (reason) {
+    setError(reason instanceof Error ? reason.message : "重试失败");
+    setIsErrorAlertOpen(true);
+  } finally {
+    setIsProcessing(false);
   }
-  ```
-- **端点 URL**：`https://maas.devops.rednote.life/openai/openai/images/generations?api-version=2025-04-01-preview`
-
-### 优先级顺序
-
-1. 用户配置的 API Key（通过 UI 配置面板）
-2. 环境变量中的 API Key（`VITE_QS_GPT_IMAGE_2_API_KEY`）
-3. 如果都没有，报错
-
-## 🧪 测试步骤
-
-### 1. 配置 API Key
-
-```
-1. 点击应用左上角的 ⚙️ 按钮
-2. 打开 API 配置面板
-3. 选择 "QS GPT Image 2"
-4. 输入 API Key: QST30bfa2e5f00da0a05e51e07096c2603b
-5. 点击 "保存配置"
+};
 ```
 
-### 2. 上传图片
-
-```
-1. 点击 "选择照片" 上传图片
-2. 填写手帐信息（标题、场景、情绪等）
-```
-
-### 3. 生成手帐
-
-```
-1. 点击 "装订手帐本" 按钮
-2. 等待生成完成（约 20 秒）
-3. 下载生成的图片
+**错误提示弹窗调用：**
+```typescript
+<ErrorAlert 
+  message={error} 
+  onClose={() => setIsErrorAlertOpen(false)}
+  onRetry={failedPhotosForRetry.length > 0 ? retryFailedPhotos : undefined}
+/>
 ```
 
-## 📊 模型对比
+#### 3. `src/styles.css`
+**变更：**
+- 添加 `.error-alert-retry` 类定义重试按钮样式
+- 使用应用主色调（黄色）作为背景色
+- 添加悬停和点击状态的样式
 
-| 特性 | GPT-2 | FLUX.2 | QS GPT Image 2 |
-|------|-------|--------|----------------|
-| 参考图数量 | 1 张 | 8 张 | 1 张 |
-| 生成速度 | 快 | 慢 | 中等 |
-| 质量 | 中等 | 高 | 中等 |
-| 提供商 | Kratos | Replicate | QS |
-| 认证方式 | Authorization | Authorization | api-key |
+**新增样式：**
+```css
+.error-alert-retry {
+  background: var(--accent-main);
+  color: var(--ink);
+  border-color: var(--ink);
+}
 
-## 🔧 技术细节
+.error-alert-retry:hover {
+  background: #ffc700;
+  transform: translateY(-2px);
+  box-shadow: 6px 7px 0 rgba(23, 18, 15, 0.12);
+}
 
-### 类型安全
-
-所有类型都已正确定义和更新：
-- `ModelType` 包含 `"qs-gpt-image-2"`
-- `UserApiConfig` 的 `modelType` 字段包含 `"qs-gpt-image-2"`
-- 所有函数参数和返回值都有正确的类型注解
-
-### 错误处理
-
-- 如果 API Key 未配置，抛出明确的错误信息
-- 如果 API 返回错误，记录详细的日志信息
-- 支持重试机制（通过 `callQsGptImage2()` 函数）
-- 所有错误都会被捕获并显示给用户
-
-### 日志记录
-
-使用 `createModelLogger()` 记录详细的调试信息：
-- 请求端点和请求体
-- 响应状态和响应体
-- 错误信息和堆栈跟踪
-
-## ✅ 构建状态
-
-```
-✓ TypeScript 编译成功
-✓ Vite 构建成功
-✓ 所有类型检查通过
-✓ 无编译错误或警告
+.error-alert-retry:active {
+  transform: translateY(0);
+  box-shadow: 2px 3px 0 rgba(23, 18, 15, 0.1);
+}
 ```
 
-## 📚 相关文档
+## 功能流程
 
-- [`QS_GPT_IMAGE_2_SETUP.md`](QS_GPT_IMAGE_2_SETUP.md) - 用户配置指南
-- [`src/lib/modelConfig.ts`](src/lib/modelConfig.ts) - 模型配置
-- [`src/lib/modelClient.ts`](src/lib/modelClient.ts) - API 调用实现
-- [`src/lib/ApiConfigPanel.tsx`](src/lib/ApiConfigPanel.tsx) - UI 配置面板
+```
+用户上传图片
+    ↓
+processFiles() 处理图片
+    ↓
+检测到上传失败
+    ↓
+保存失败图片到 failedPhotosForRetry
+    ↓
+显示错误提示弹窗（包含重试按钮）
+    ↓
+用户点击"重试上传"
+    ↓
+retryFailedPhotos() 执行
+    ├─ 从 blob 重建 File 对象
+    ├─ 重新调用 processImageFile()
+    ├─ 更新 photos 数组
+    └─ 检查是否还有失败
+        ├─ 全部成功 → 关闭弹窗，播放成功音效
+        └─ 仍有失败 → 显示新的错误提示，保留重试按钮
+```
 
-## 🚀 下一步
+## 用户体验
 
-1. ✅ 实现 QS GPT Image 2 API 调用
-2. ✅ 添加 UI 配置面板支持
-3. ✅ 修复所有 TypeScript 错误
-4. ✅ 构建成功
-5. 📝 测试新模型的实际功能
-6. 📝 收集用户反馈并优化
+### 成功场景
+1. 用户上传图片
+2. 如果 COS 上传失败，显示错误弹窗
+3. 用户点击"重试上传"
+4. 图片重新上传成功
+5. 弹窗关闭，播放成功音效
 
-## 📞 常见问题
+### 失败场景
+1. 用户上传图片
+2. COS 上传失败，显示错误弹窗
+3. 用户点击"重试上传"
+4. 重试仍然失败
+5. 显示新的错误提示，保留重试按钮
+6. 用户可以继续重试或关闭弹窗，手动填入图片链接
 
-### Q: 为什么出现 "invalid token" 错误？
+## 技术亮点
 
-A: 这说明你的 API Key 无效或已过期。请检查：
-1. API Key 是否正确复制
-2. API Key 是否有效
-3. API Key 是否有足够的额度
+1. **无缝重试**：用户无需重新选择文件，直接点击重试
+2. **智能状态管理**：通过 `failedPhotosForRetry` 精确跟踪失败的图片
+3. **渐进式反馈**：重试失败时仍保留重试按钮，允许用户继续尝试
+4. **一致的 UI 设计**：重试按钮与应用整体风格保持一致
+5. **完整的错误处理**：支持网络错误、CORS 错误、超时等各种失败场景
 
-### Q: 如何切换回其他模型？
+## 测试建议
 
-A: 打开 API 配置面板，选择其他模型，输入对应的 API Key，然后保存。
+1. **正常上传**：验证无错误时的正常流程
+2. **单张图片失败**：验证单张图片失败时的重试流程
+3. **多张图片部分失败**：验证部分失败时只重试失败的图片
+4. **重试失败**：验证重试仍然失败时的处理
+5. **网络恢复**：验证网络恢复后重试成功的场景
 
-### Q: 自定义端点有什么用？
+## 相关文档
 
-A: 如果你有自己的代理或自建服务，可以使用自定义端点来调用你自己的服务。
-
----
-
-**实现日期**: 2024年  
-**状态**: ✅ 完成  
-**构建状态**: ✅ 成功
+- [`COS_UPLOAD_RETRY_FEATURE.md`](COS_UPLOAD_RETRY_FEATURE.md) - 功能详细说明
+- [`RETRY_FEATURE_TEST_GUIDE.md`](RETRY_FEATURE_TEST_GUIDE.md) - 测试指南

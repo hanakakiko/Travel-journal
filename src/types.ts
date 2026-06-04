@@ -97,4 +97,6 @@ export type JournalDraft = {
   generationError?: string;
   /** 接口原始返回，便于调试。 */
   generationRaw?: unknown;
+  /** 生成耗时（毫秒）。 */
+  generationTimeMs?: number;
 };

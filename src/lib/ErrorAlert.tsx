@@ -6,6 +6,8 @@ export type ErrorAlertProps = {
   onClose: () => void;
   /** 自动关闭延迟（毫秒），不设置则不自动关闭 */
   autoCloseDuration?: number;
+  /** 重试按钮回调（如果提供则显示重试按钮） */
+  onRetry?: () => void;
 };
 
 /**
@@ -14,7 +16,7 @@ export type ErrorAlertProps = {
  * - 可手动关闭或自动关闭
  * - 与应用风格保持一致
  */
-export const ErrorAlert = ({ message, onClose, autoCloseDuration }: ErrorAlertProps) => {
+export const ErrorAlert = ({ message, onClose, autoCloseDuration, onRetry }: ErrorAlertProps) => {
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
@@ -105,8 +107,13 @@ export const ErrorAlert = ({ message, onClose, autoCloseDuration }: ErrorAlertPr
         </div>
 
         <div className="error-alert-footer">
+          {onRetry && (
+            <button className="error-alert-action error-alert-retry" onClick={onRetry}>
+              重试上传
+            </button>
+          )}
           <button className="error-alert-action" onClick={handleClose}>
-            我知道了
+            {onRetry ? "关闭" : "我知道了"}
           </button>
         </div>
       </div>

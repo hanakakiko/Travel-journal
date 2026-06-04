@@ -955,7 +955,7 @@ const callQsGptImage2Once = async ({
   }
 
   // 使用用户自定义端点或默认端点
-  const endpoint = userQsConfig?.customEndpoint || "https://maas.devops.rednote.life/openai/openai/images/edits?api-version=2025-04-01-preview";
+  const endpoint = userQsConfig?.customEndpoint || "/maas/openai/openai/images/generations?api-version=2025-04-01-preview";
 
   const qlog = createModelLogger("QS GPT Image 2");
 
@@ -1180,6 +1180,608 @@ export const callQsGptImage2 = async ({
 };
 
 /**
+ * 单次调用 V-API GPT Image 2 API，不带重试。
+ */
+const callVApiGptImage2Once = async ({
+  prompt,
+  imageUrls,
+  targetWidth = DEFAULT_GEN_WIDTH,
+  targetHeight = DEFAULT_GEN_HEIGHT,
+  timeoutMs = 300_000,
+}: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
+  // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件
+  const userConfigs = loadUserApiConfig();
+  const userVApiConfig = userConfigs?.["v-api-gpt-image-2"];
+  const apiKey = userVApiConfig?.apiKey || getApiKey("VITE_V_API_GPT_IMAGE_2_API_KEY");
+
+  if (!apiKey) {
+    throw new Error(
+      "V-API GPT Image 2 API Key 未配置。请在 src/lib/api-keys.local.ts 中配置 VITE_V_API_GPT_IMAGE_2_API_KEY，" +
+      "或在 API 配置面板中输入你的 API Key，" +
+      "或在 .env 文件中设置 VITE_V_API_GPT_IMAGE_2_API_KEY。"
+    );
+  }
+
+  // 使用用户自定义端点或默认端点
+  const endpoint = userVApiConfig?.customEndpoint || "https://api.v3.cm/v1/images/edits";
+
+  const vlog = createModelLogger("V-API GPT Image 2");
+
+  // 获取参考图片 URLs
+  const imageUrlList: string[] = [];
+  if (imageUrls && imageUrls.length > 0) {
+    for (let i = 0; i < imageUrls.length; i++) {
+      imageUrlList.push(imageUrls[i]);
+      vlog(`✓ 参考图片 ${i + 1}: ${imageUrls[i].slice(0, 80)}...`);
+    }
+  }
+
+  vlog("request →", endpoint);
+  vlog("  model: gpt-image-2-c");
+  vlog("  prompt:", prompt.slice(0, 100) + "...");
+  vlog("  size:", `${targetWidth}x${targetHeight}`);
+  vlog("  response_format: b64_json");
+  vlog(`  images: ${imageUrlList.length} 张`);
+
+  // 使用 FormData API 构建 multipart/form-data 请求体
+  const formData = new FormData();
+
+  // 添加多个 image 字段 - 需要转换为 Blob 对象
+  const MAX_FILE_SIZE_MB = 4;
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+  const ALLOWED_FORMATS = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+  
+  for (let i = 0; i < imageUrlList.length; i++) {
+    try {
+      const imageUrl = imageUrlList[i];
+      // 从 URL 获取图片 Blob
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`无法获取图片 ${i + 1}：HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      
+      // 检查文件大小
+      if (blob.size > MAX_FILE_SIZE_BYTES) {
+        throw new Error(
+          `图片 ${i + 1} 过大：${(blob.size / 1024 / 1024).toFixed(2)}MB，` +
+          `API 限制最大 ${MAX_FILE_SIZE_MB}MB`
+        );
+      }
+      
+      // 检查文件格式
+      if (!ALLOWED_FORMATS.includes(blob.type)) {
+        vlog(`⚠️ 图片 ${i + 1} 格式为 ${blob.type}，API 推荐使用 PNG/JPG/WebP`);
+      }
+      
+      // 生成文件名（从 URL 提取或使用默认名称）
+      const urlParts = imageUrl.split('/');
+      const fileName = urlParts[urlParts.length - 1] || `image_${i + 1}.jpg`;
+      
+      // 添加为 File 对象而不是字符串
+      formData.append("image", blob, fileName);
+      vlog(`✓ 图片 ${i + 1} 已转换为 Blob 对象 (${(blob.size / 1024).toFixed(1)}KB, ${blob.type})`);
+    } catch (error) {
+      vlog(`✗ 图片 ${i + 1} 转换失败:`, error);
+      throw new Error(`无法处理参考图片 ${i + 1}：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  // 添加其他字段
+  formData.append("prompt", prompt);
+  formData.append("model", "gpt-image-2-c");
+  formData.append("size", `${targetWidth}x${targetHeight}`);
+  formData.append("response_format", "b64_json");
+
+  // 打印完整的请求体信息
+  vlog("=== 完整请求体 (multipart/form-data) ===");
+  vlog(`  images: ${imageUrlList.length} 张`);
+  vlog(`  prompt 长度: ${prompt.length} 字符`);
+  vlog(`  model: gpt-image-2-c`);
+  vlog(`  size: ${targetWidth}x${targetHeight}`);
+  vlog(`  response_format: b64_json`);
+
+  // 打印实际发送的请求信息（用于调试）
+  vlog("=== 实际发送的请求信息 ===");
+  vlog(`  URL: ${endpoint}`);
+  vlog(`  Method: POST`);
+  vlog(`  Headers:`);
+  vlog(`    Authorization: Bearer ${apiKey.slice(0, 10)}...${apiKey.slice(-10)}`);
+  vlog(`    Content-Type: multipart/form-data (自动设置)`);
+  vlog(`  Body 字段:`);
+  for (let i = 0; i < imageUrlList.length; i++) {
+    vlog(`    - image[${i + 1}]: ${imageUrlList[i].slice(0, 80)}...`);
+  }
+  vlog(`    - prompt: ${prompt.length} 字符`);
+  vlog(`    - model: gpt-image-2-c`);
+  vlog(`    - size: ${targetWidth}x${targetHeight}`);
+  vlog(`    - response_format: b64_json`);
+
+  // 生成完整的 curl 命令用于调试（注：实际发送的是 Blob 对象，curl 示例仅供参考）
+  vlog("=== 完整 curl 命令（参考，实际发送 Blob 对象）===");
+  let curlCmd = `curl --location '${endpoint}' \\
+  --header 'Authorization: Bearer ${apiKey}' \\`;
+  for (let i = 0; i < imageUrlList.length; i++) {
+    const fileName = imageUrlList[i].split('/').pop() || `image_${i + 1}.jpg`;
+    curlCmd += `\n  --form 'image=@/path/to/${fileName}' \\`;
+  }
+  curlCmd += `\n  --form 'prompt="${prompt.replace(/"/g, '\\"')}"' \\
+  --form 'model="gpt-image-2-c"' \\
+  --form 'size="${targetWidth}x${targetHeight}"' \\
+  --form 'response_format="b64_json"'`;
+  vlog(curlCmd);
+
+  const response = await fetchWithTimeout(
+    "V-API GPT Image 2 API",
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        // 不设置 Content-Type，让浏览器自动处理 FormData
+      },
+      body: formData,
+    },
+    timeoutMs,
+  );
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    vlog("← HTTP error", response.status, text);
+    throw new Error(`V-API GPT Image 2 API 返回 HTTP ${response.status}${text ? `：${text.slice(0, 160)}` : ""}`);
+  }
+
+  let payload: unknown;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    vlog("← non-JSON body", text);
+    throw new Error(`V-API GPT Image 2 API 返回非 JSON：${text.slice(0, 160)}`);
+  }
+
+  vlog("← response", payload);
+  vlog("=== 完整响应体 ===");
+  vlog(JSON.stringify(payload, null, 2));
+
+  // 打印响应格式信息
+  if (payload && typeof payload === "object") {
+    const payloadObj = payload as Record<string, unknown>;
+    vlog("=== 响应格式分析 ===");
+    vlog(`  created: ${payloadObj.created ?? "未找到"}`);
+    vlog(`  data 数组长度: ${Array.isArray(payloadObj.data) ? (payloadObj.data as any[]).length : "未找到"}`);
+    if (Array.isArray(payloadObj.data) && (payloadObj.data as any[]).length > 0) {
+      const firstData = (payloadObj.data as any[])[0];
+      vlog(`  data[0] 字段: ${Object.keys(firstData).join(", ")}`);
+      if ("b64_json" in firstData) {
+        const b64Str = firstData.b64_json as string;
+        vlog(`  data[0].b64_json 长度: ${b64Str.length} 字符`);
+      }
+      if ("url" in firstData) {
+        vlog(`  data[0].url: ${(firstData.url as string).slice(0, 80)}...`);
+      }
+    }
+    if ("usage" in payloadObj) {
+      const usage = payloadObj.usage as Record<string, unknown>;
+      vlog(`  usage.total_tokens: ${usage.total_tokens ?? "未找到"}`);
+    }
+  }
+
+  // 提取生成的图片 URL
+  let generatedImageUrl: string | null = null;
+
+  // 尝试从 data[0].url 提取 URL
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "data" in payload &&
+    Array.isArray((payload as any).data) &&
+    (payload as any).data.length > 0 &&
+    "url" in (payload as any).data[0]
+  ) {
+    const url = (payload as any).data[0].url;
+    if (typeof url === "string") {
+      generatedImageUrl = url;
+      vlog(`✓ 生成成功，图片 URL: ${url.slice(0, 80)}...`);
+    }
+  }
+
+  // 如果没有找到 URL，尝试查找 base64 数据
+  if (!generatedImageUrl) {
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "data" in payload &&
+      Array.isArray((payload as any).data) &&
+      (payload as any).data.length > 0 &&
+      "b64_json" in (payload as any).data[0]
+    ) {
+      const b64Data = (payload as any).data[0].b64_json;
+      if (typeof b64Data === "string") {
+        // 将 base64 转换为 data URL
+        generatedImageUrl = `data:image/jpeg;base64,${b64Data}`;
+        vlog(`✓ 生成成功，图片已转换为 data URL (${b64Data.length} 字符)`);
+      }
+    }
+  }
+
+  // 如果还是没有找到，尝试其他可能的字段
+  if (!generatedImageUrl) {
+    generatedImageUrl = extractGeneratedImageUrl(payload);
+  }
+
+  if (!generatedImageUrl) {
+    throw new Error("V-API GPT Image 2 API 未在返回结构中找到图片链接或 base64 数据（已在控制台打印 raw response，请确认字段路径）");
+  }
+
+  vlog(`✓ 生成成功，图片 URL: ${generatedImageUrl.slice(0, 80)}...`);
+  return { imageUrl: generatedImageUrl, raw: payload };
+};
+
+/**
+ * 调用 V-API GPT Image 2 API（自动重试版）。
+ */
+export const callVApiGptImage2 = async ({
+  maxAttempts = 3,
+  retryDelayMs = 1500,
+  onAttempt,
+  ...rest
+}: Flux2ProPic2PicParams) => {
+  const total = Math.max(1, maxAttempts);
+  let lastError: Error | undefined;
+  const vlog = createModelLogger("V-API GPT Image 2");
+
+  for (let attempt = 1; attempt <= total; attempt++) {
+    onAttempt?.({ attempt, totalAttempts: total, lastError });
+
+    try {
+      const result = await callVApiGptImage2Once(rest);
+      if (attempt > 1) vlog(`✓ succeeded on attempt ${attempt}/${total}`);
+      return result;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const retryable = isRetryableKratosError(lastError);
+      const isLast = attempt >= total;
+
+      vlog(
+        `× attempt ${attempt}/${total} failed`,
+        { retryable, isLast, message: lastError.message },
+      );
+
+      if (isLast || !retryable) {
+        if (attempt > 1) {
+          throw new Error(`${lastError.message}（已重试 ${attempt - 1} 次仍失败）`);
+        }
+        throw lastError;
+      }
+
+      const waitMs = retryDelayMs * attempt;
+      vlog(`… waiting ${waitMs}ms before next retry`);
+      await sleep(waitMs);
+    }
+  }
+
+  throw lastError ?? new Error("V-API GPT Image 2 API 调用失败");
+};
+
+/**
+ * 单次调用 V-API Seedream 4.0 API，不带重试。
+ */
+const callVApiSeedream4Once = async ({
+  prompt,
+  imageUrls,
+  targetWidth = DEFAULT_GEN_WIDTH,
+  targetHeight = DEFAULT_GEN_HEIGHT,
+  timeoutMs = 300_000,
+}: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
+  // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件
+  const userConfigs = loadUserApiConfig();
+  const userSeedreamConfig = userConfigs?.["v-api-seedream-4-5"];
+  const apiKey = userSeedreamConfig?.apiKey || getApiKey("VITE_V_API_SEEDREAM_4_5_API_KEY");
+
+  if (!apiKey) {
+    throw new Error(
+      "V-API Seedream 4.5 API Key 未配置。请在 src/lib/api-keys.local.ts 中配置 VITE_V_API_SEEDREAM_4_5_API_KEY，" +
+      "或在 API 配置面板中输入你的 API Key，" +
+      "或在 .env 文件中设置 VITE_V_API_SEEDREAM_4_5_API_KEY。"
+    );
+  }
+
+  // 使用用户自定义端点或默认端点
+  const endpoint = userSeedreamConfig?.customEndpoint || "https://api.v3.cm/v1/images/edits";
+
+  const slog = createModelLogger("V-API Seedream 4.5");
+
+  // 获取参考图片 URLs（支持 1-10 张）
+  const imageUrlList: string[] = [];
+  if (imageUrls && imageUrls.length > 0) {
+    const maxImages = 10;
+    const imagesToUse = imageUrls.slice(0, maxImages);
+    for (let i = 0; i < imagesToUse.length; i++) {
+      imageUrlList.push(imagesToUse[i]);
+      slog(`✓ 参考图片 ${i + 1}: ${imagesToUse[i].slice(0, 80)}...`);
+    }
+    if (imageUrls.length > maxImages) {
+      slog(`⚠️ 超过最大图片数 ${maxImages}，仅使用前 ${maxImages} 张`);
+    }
+  }
+
+  // Seedream 4.5 支持两种方式指定尺寸（不可混用）：
+  // 方式 1：指定 2K 或 4K，让模型根据 prompt 判断具体尺寸
+  // 方式 2：指定具体像素值（如 2048x2048）
+  //   - 总像素范围：[2560x1440=3686400, 4096x4096=16777216]
+  //   - 宽高比范围：[1/16, 16]
+  
+  // 官方推荐的标准尺寸映射表（与 GPT-2 保持一致）
+  const SEEDREAM_SIZE_MAP: Record<string, { "2K": string; "4K": string }> = {
+    "1:1": { "2K": "2048x2048", "4K": "4096x4096" },
+    "4:3": { "2K": "2304x1728", "4K": "4704x3520" },
+    "3:4": { "2K": "1728x2304", "4K": "3520x4704" },
+    "16:9": { "2K": "2848x1600", "4K": "5504x3040" },
+    "9:16": { "2K": "1600x2848", "4K": "3040x5504" },
+    "3:2": { "2K": "2496x1664", "4K": "4992x3328" },
+    "2:3": { "2K": "1664x2496", "4K": "3328x4992" },
+    "21:9": { "2K": "3136x1344", "4K": "6240x2656" },
+  };
+  
+  // 根据目标宽高比确定使用 2K 还是 4K
+  const totalPixels = targetWidth * targetHeight;
+  const sizeLevel = totalPixels >= 8388608 ? "4K" : "2K";
+  
+  // 计算目标宽高比（四舍五入到小数点后两位）
+  const ratio = targetWidth / targetHeight;
+  let closestRatio = "9:16"; // 默认
+  let minDiff = Infinity;
+  
+  for (const [key] of Object.entries(SEEDREAM_SIZE_MAP)) {
+    const [w, h] = key.split(":").map(Number);
+    const keyRatio = w / h;
+    const diff = Math.abs(ratio - keyRatio);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closestRatio = key;
+    }
+  }
+  
+  // 获取对应的像素尺寸
+  const sizeMapping = SEEDREAM_SIZE_MAP[closestRatio];
+  const sizeStr = sizeMapping[sizeLevel];
+  
+  slog(`✓ 目标宽高比: ${targetWidth}x${targetHeight} (${closestRatio})`);
+  slog(`✓ 使用尺寸等级: ${sizeLevel}`);
+  slog(`✓ 最终像素值: ${sizeStr}`);
+
+  slog("request →", endpoint);
+  slog("  model: doubao-seedream-4-5-251128");
+  slog("  prompt:", prompt.slice(0, 100) + "...");
+  slog("  size:", sizeStr);
+  slog("  response_format: url");
+  slog(`  images: ${imageUrlList.length} 张`);
+
+  // 使用 FormData API 构建 multipart/form-data 请求体
+  const formData = new FormData();
+
+  // 添加多个 image 字段 - 需要转换为 Blob 对象
+  const MAX_FILE_SIZE_MB = 10;
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+  const ALLOWED_FORMATS = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+  
+  for (let i = 0; i < imageUrlList.length; i++) {
+    try {
+      const imageUrl = imageUrlList[i];
+      // 从 URL 获取图片 Blob
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`无法获取图片 ${i + 1}：HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      
+      // 检查文件大小
+      if (blob.size > MAX_FILE_SIZE_BYTES) {
+        throw new Error(
+          `图片 ${i + 1} 过大：${(blob.size / 1024 / 1024).toFixed(2)}MB，` +
+          `API 限制最大 ${MAX_FILE_SIZE_MB}MB`
+        );
+      }
+      
+      // 检查文件格式
+      if (!ALLOWED_FORMATS.includes(blob.type)) {
+        slog(`⚠️ 图片 ${i + 1} 格式为 ${blob.type}，API 推荐使用 PNG/JPG/WebP`);
+      }
+      
+      // 生成文件名（从 URL 提取或使用默认名称）
+      const urlParts = imageUrl.split('/');
+      const fileName = urlParts[urlParts.length - 1] || `image_${i + 1}.jpg`;
+      
+      // 添加为 File 对象而不是字符串
+      formData.append("image", blob, fileName);
+      slog(`✓ 图片 ${i + 1} 已转换为 Blob 对象 (${(blob.size / 1024).toFixed(1)}KB, ${blob.type})`);
+    } catch (error) {
+      slog(`✗ 图片 ${i + 1} 转换失败:`, error);
+      throw new Error(`无法处理参考图片 ${i + 1}：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  // 添加其他字段
+  formData.append("prompt", prompt);
+  formData.append("model", "doubao-seedream-4-5-251128");
+  formData.append("size", sizeStr);
+  formData.append("response_format", "url");
+  formData.append("watermark", "false");
+
+  // 打印完整的请求体信息
+  slog("=== 完整请求体 (multipart/form-data) ===");
+  slog(`  images: ${imageUrlList.length} 张`);
+  slog(`  prompt 长度: ${prompt.length} 字符`);
+  slog(`  model: doubao-seedream-4-5-251128`);
+  slog(`  size: ${sizeStr}`);
+  slog(`  response_format: url`);
+  slog(`  watermark: false`);
+
+  // 打印实际发送的请求信息（用于调试）
+  slog("=== 实际发送的请求信息 ===");
+  slog(`  URL: ${endpoint}`);
+  slog(`  Method: POST`);
+  slog(`  Headers:`);
+  slog(`    Authorization: Bearer ${apiKey.slice(0, 10)}...${apiKey.slice(-10)}`);
+  slog(`    Content-Type: multipart/form-data (自动设置)`);
+  slog(`  Body 字段:`);
+  for (let i = 0; i < imageUrlList.length; i++) {
+    slog(`    - image[${i + 1}]: ${imageUrlList[i].slice(0, 80)}...`);
+  }
+  slog(`    - prompt: ${prompt.length} 字符`);
+  slog(`    - model: doubao-seedream-4-5-251128`);
+  slog(`    - size: ${sizeStr}`);
+  slog(`    - response_format: url`);
+  slog(`    - watermark: false`);
+
+  // 生成完整的 curl 命令用于调试（注：实际发送的是 Blob 对象，curl 示例仅供参考）
+  slog("=== 完整 curl 命令（参考，实际发送 Blob 对象）===");
+  let curlCmd = `curl --location '${endpoint}' \\
+  --header 'Authorization: Bearer ${apiKey}' \\`;
+  for (let i = 0; i < imageUrlList.length; i++) {
+    const fileName = imageUrlList[i].split('/').pop() || `image_${i + 1}.jpg`;
+    curlCmd += `\n  --form 'image=@/path/to/${fileName}' \\`;
+  }
+  curlCmd += `\n  --form 'prompt="${prompt.replace(/"/g, '\\"')}"' \\
+  --form 'model="doubao-seedream-4-5-251128"' \\
+  --form 'size="${sizeStr}"' \\
+  --form 'response_format="url"' \\
+  --form 'watermark="false"'`;
+  slog(curlCmd);
+
+  const response = await fetchWithTimeout(
+    "V-API Seedream 4.5 API",
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        // 不设置 Content-Type，让浏览器自动处理 FormData
+      },
+      body: formData,
+    },
+    timeoutMs,
+  );
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    slog("← HTTP error", response.status, text);
+    throw new Error(`V-API Seedream 4.5 API 返回 HTTP ${response.status}${text ? `：${text.slice(0, 160)}` : ""}`);
+  }
+
+  let payload: unknown;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    slog("← non-JSON body", text);
+    throw new Error(`V-API Seedream 4.5 API 返回非 JSON：${text.slice(0, 160)}`);
+  }
+
+  slog("← response", payload);
+  slog("=== 完整响应体 ===");
+  slog(JSON.stringify(payload, null, 2));
+
+  // 打印响应格式信息
+  if (payload && typeof payload === "object") {
+    const payloadObj = payload as Record<string, unknown>;
+    slog("=== 响应格式分析 ===");
+    slog(`  created: ${payloadObj.created ?? "未找到"}`);
+    slog(`  data 数组长度: ${Array.isArray(payloadObj.data) ? (payloadObj.data as any[]).length : "未找到"}`);
+    if (Array.isArray(payloadObj.data) && (payloadObj.data as any[]).length > 0) {
+      const firstData = (payloadObj.data as any[])[0];
+      slog(`  data[0] 字段: ${Object.keys(firstData).join(", ")}`);
+      if ("url" in firstData) {
+        slog(`  data[0].url: ${(firstData.url as string).slice(0, 80)}...`);
+      }
+    }
+    if ("usage" in payloadObj) {
+      const usage = payloadObj.usage as Record<string, unknown>;
+      slog(`  usage.generated_images: ${usage.generated_images ?? "未找到"}`);
+      slog(`  usage.total_tokens: ${usage.total_tokens ?? "未找到"}`);
+    }
+  }
+
+  // 提取生成的图片 URL
+  let generatedImageUrl: string | null = null;
+
+  // 尝试从 data[0].url 提取 URL
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "data" in payload &&
+    Array.isArray((payload as any).data) &&
+    (payload as any).data.length > 0 &&
+    "url" in (payload as any).data[0]
+  ) {
+    const url = (payload as any).data[0].url;
+    if (typeof url === "string") {
+      generatedImageUrl = url;
+      slog(`✓ 生成成功，图片 URL: ${url.slice(0, 80)}...`);
+    }
+  }
+
+  // 如果还是没有找到，尝试其他可能的字段
+  if (!generatedImageUrl) {
+    generatedImageUrl = extractGeneratedImageUrl(payload);
+  }
+
+  if (!generatedImageUrl) {
+    throw new Error("V-API Seedream 4.5 API 未在返回结构中找到图片链接（已在控制台打印 raw response，请确认字段路径）");
+  }
+
+  slog(`✓ 生成成功，图片 URL: ${generatedImageUrl.slice(0, 80)}...`);
+  return { imageUrl: generatedImageUrl, raw: payload };
+};
+
+/**
+ * 调用 V-API Seedream 4.0 API（自动重试版）。
+ */
+export const callVApiSeedream4 = async ({
+  maxAttempts = 3,
+  retryDelayMs = 1500,
+  onAttempt,
+  ...rest
+}: Flux2ProPic2PicParams) => {
+  const total = Math.max(1, maxAttempts);
+  let lastError: Error | undefined;
+  const slog = createModelLogger("V-API Seedream 4.5");
+
+  for (let attempt = 1; attempt <= total; attempt++) {
+    onAttempt?.({ attempt, totalAttempts: total, lastError });
+
+    try {
+      const result = await callVApiSeedream4Once(rest);
+      if (attempt > 1) slog(`✓ succeeded on attempt ${attempt}/${total}`);
+      return result;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const retryable = isRetryableKratosError(lastError);
+      const isLast = attempt >= total;
+
+      slog(
+        `× attempt ${attempt}/${total} failed`,
+        { retryable, isLast, message: lastError.message },
+      );
+
+      if (isLast || !retryable) {
+        if (attempt > 1) {
+          throw new Error(`${lastError.message}（已重试 ${attempt - 1} 次仍失败）`);
+        }
+        throw lastError;
+      }
+
+      const waitMs = retryDelayMs * attempt;
+      slog(`… waiting ${waitMs}ms before next retry`);
+      await sleep(waitMs);
+    }
+  }
+
+  throw lastError ?? new Error("V-API Seedream 4.0 API 调用失败");
+};
+
+/**
  * 把当前一组图片的远程地址整理成 Kratos 接口需要的 imageUrls 数组。
  * 优先级（从高到低）：
  *   1. 用户在 InfoModal 中手填的链接（最高，便于 debug / 覆盖错误自动上传结果）；
@@ -1214,6 +1816,7 @@ const resolveImageUrls = (photos: PhotoAsset[], extra?: string[]): string[] => {
 
 export const requestJournalDraft = async (request: StoryRequest): Promise<JournalDraft> => {
   const draft = createMockJournalDraft(request);
+  const startTime = Date.now();
 
   // 先解析实际可用的图片 URL
   const imageUrls = resolveImageUrls(request.photos, request.remoteUrls);
@@ -1244,22 +1847,26 @@ export const requestJournalDraft = async (request: StoryRequest): Promise<Journa
       targetHeight: DEFAULT_GEN_HEIGHT,
     });
     
-    mlog(`✓ ${modelName} API 调用成功`);
+    const generationTimeMs = Date.now() - startTime;
+    mlog(`✓ ${modelName} API 调用成功，耗时 ${generationTimeMs}ms`);
     
     return {
       ...draft,
       generatedImageUrl: imageUrl,
       generatedPrompt: prompt,
       generationRaw: raw,
+      generationTimeMs,
     };
   } catch (error) {
     const modelName = request.answers.selectedModel === "flux-2-pro" ? "FLUX.2 [pro]" : "GPT-2";
     const mlog = createModelLogger(modelName);
+    const generationTimeMs = Date.now() - startTime;
     mlog("× call failed", error);
     return {
       ...draft,
       generatedPrompt: prompt,
       generationError: `${modelName} API 调用失败：${humanizeError(error)}`,
+      generationTimeMs,
     };
   }
 };

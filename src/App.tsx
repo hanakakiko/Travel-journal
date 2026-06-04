@@ -73,15 +73,17 @@ const downloadDataUrl = (dataUrl: string, filename: string) => {
 };
 
 function App() {
-  const [photos, setPhotos] = useState<PhotoAsset[]>([]);
-  const [answers, setAnswers] = useState<UserAnswers>(defaultAnswers);
-  const [styleId, setStyleId] = useState<StyleId>("auto");
-  const [templateId, setTemplateId] = useState<TemplateId>("collage");
-  const [draft, setDraft] = useState<JournalDraft | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState("");
-  const [isErrorAlertOpen, setIsErrorAlertOpen] = useState(false);
+   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
+   const [answers, setAnswers] = useState<UserAnswers>(defaultAnswers);
+   const [styleId, setStyleId] = useState<StyleId>("auto");
+   const [templateId, setTemplateId] = useState<TemplateId>("collage");
+   const [draft, setDraft] = useState<JournalDraft | null>(null);
+   const [isProcessing, setIsProcessing] = useState(false);
+   const [isGenerating, setIsGenerating] = useState(false);
+   const [error, setError] = useState("");
+   const [isErrorAlertOpen, setIsErrorAlertOpen] = useState(false);
+   /** 记录当前错误是否来自 COS 上传失败（用于判断是否显示重试按钮） */
+   const [failedPhotosForRetry, setFailedPhotosForRetry] = useState<PhotoAsset[]>([]);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   /**
    * 「手绘中」遮罩的持久挂载状态：
@@ -171,11 +173,72 @@ function App() {
           `2. 删除这些图片后重新上传\n` +
           `3. 继续生成但结果可能不会用到这些图片`;
         setError(errorMessage);
+        setFailedPhotosForRetry(failedPhotos);
         setIsErrorAlertOpen(true);
       }
       if (processed.length) play("upload");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "图片读取失败");
+      setFailedPhotosForRetry([]);
+      setIsErrorAlertOpen(true);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  /** 重试上传失败的图片 */
+  const retryFailedPhotos = async () => {
+    if (!failedPhotosForRetry.length) return;
+    setError("");
+    setIsErrorAlertOpen(false);
+    setIsProcessing(true);
+    try {
+      // 从失败的图片中提取原始 File 对象（通过 blob 重建）
+      const retryFiles = await Promise.all(
+        failedPhotosForRetry.map(async (photo) => {
+          const response = await fetch(photo.url);
+          const blob = await response.blob();
+          return new File([blob], photo.fileName, { type: blob.type });
+        })
+      );
+
+      // 重新处理这些文件
+      const reprocessed = await Promise.all(retryFiles.map(processImageFile));
+
+      // 更新 photos 数组：用新的处理结果替换对应的失败图片
+      setPhotos((current) => {
+        const next = [...current];
+        reprocessed.forEach((newPhoto) => {
+          const index = next.findIndex((p) => p.fileName === newPhoto.fileName);
+          if (index >= 0) {
+            next[index] = newPhoto;
+          }
+        });
+        return next;
+      });
+
+      // 检查是否还有失败的
+      const stillFailed = reprocessed.filter((photo) => !photo.remoteUrl);
+      if (stillFailed.length > 0) {
+        const failedList = stillFailed
+          .map((p) => {
+            const errorReason = p.uploadError ? ` — ${p.uploadError}` : "";
+            return `• ${p.fileName}${errorReason}`;
+          })
+          .join("\n");
+        setError(
+          `仍有 ${stillFailed.length} 张图片上传失败：\n\n${failedList}\n\n` +
+          `可在「补充信息」面板手动填入这些图片的可访问链接。`
+        );
+        setFailedPhotosForRetry(stillFailed);
+        setIsErrorAlertOpen(true);
+      } else {
+        // 全部成功
+        setFailedPhotosForRetry([]);
+        play("success");
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "重试失败");
       setIsErrorAlertOpen(true);
     } finally {
       setIsProcessing(false);
@@ -545,7 +608,11 @@ function App() {
 
       {/* 错误提示弹窗 */}
       {isErrorAlertOpen && error && (
-        <ErrorAlert message={error} onClose={() => setIsErrorAlertOpen(false)} />
+        <ErrorAlert
+          message={error}
+          onClose={() => setIsErrorAlertOpen(false)}
+          onRetry={failedPhotosForRetry.length > 0 ? retryFailedPhotos : undefined}
+        />
       )}
     </main>
   );
@@ -594,6 +661,13 @@ function GeneratedShowcase({ draft, onDownload }: { draft: JournalDraft; onDownl
 
   if (!hasImage && !hasError) return null;
 
+  // 格式化生成耗时
+  const formatGenerationTime = (ms?: number): string => {
+    if (!ms) return "";
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+  };
+
   return (
     <section
       className={classNames("generated-hero", hasImage && "is-ready", hasError && "is-error")}
@@ -604,6 +678,11 @@ function GeneratedShowcase({ draft, onDownload }: { draft: JournalDraft; onDownl
           <p className="generated-hero-kicker">LLM · FLUX.2 [pro]</p>
           <h3>{draft.title}</h3>
           <small>{draft.subtitle}</small>
+          {draft.generationTimeMs && (
+            <small style={{ display: "block", marginTop: "0.5em", color: "#666", fontSize: "0.85em" }}>
+              ⏱ 生成耗时：{formatGenerationTime(draft.generationTimeMs)}
+            </small>
+          )}
         </div>
         {hasImage && (
           <button type="button" className="generated-hero-download" onClick={onDownload}>

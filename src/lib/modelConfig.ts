@@ -6,7 +6,7 @@
 import { getApiKey } from "./api-keys.local";
 import { loadUserApiConfig } from "./userApiConfig";
 
-export type ModelType = "gpt-2" | "flux-2-pro" | "qs-gpt-image-2" | "other";
+export type ModelType = "gpt-2" | "flux-2-pro" | "qs-gpt-image-2" | "v-api-gpt-image-2" | "v-api-seedream-4-5" | "other";
 
 export interface ModelConfig {
   id: ModelType;
@@ -31,7 +31,7 @@ export const MODEL_CONFIGS: Record<ModelType, ModelConfig> = {
   "gpt-2": {
     id: "gpt-2",
     name: "GPT-2 (Kratos)",
-    description: "小红书内部 Kratos 平台的 GPT-2 模型，速度快，适合快速迭代",
+    description: "小红书内部 Kratos 平台的 GPT-2 模型，效果超好，强烈推荐！一张多图成本约1块钱",
     provider: "kratos",
     endpoint: "/kratos/api/v1/generate",
     apiTokenEnvVar: "VITE_KRATOS_API_TOKEN",
@@ -45,7 +45,7 @@ export const MODEL_CONFIGS: Record<ModelType, ModelConfig> = {
   "flux-2-pro": {
     id: "flux-2-pro",
     name: "FLUX.2 [pro]",
-    description: "Black Forest Labs 的 FLUX.2 Pro 模型，支持多张参考图，质量最高",
+    description: "Black Forest Labs 的 FLUX.2 Pro 模型，质量超低，文字容易乱码，图片容易漏掉或幻觉，但便宜",
     provider: "replicate",
     endpoint: "/replicate/v1/predictions",
     apiTokenEnvVar: "VITE_REPLICATE_API_TOKEN",
@@ -71,9 +71,9 @@ export const MODEL_CONFIGS: Record<ModelType, ModelConfig> = {
   "qs-gpt-image-2": {
     id: "qs-gpt-image-2",
     name: "QS GPT Image 2",
-    description: "小红书 QS 平台的 GPT Image 2 模型，支持高质量图生图",
+    description: "小红书 QS 平台的 GPT Image 2 模型，效果超好，强烈推荐！一张多图成本约1块钱",
     provider: "other",
-    endpoint: "https://maas.devops.rednote.life/openai/openai/images/generations?api-version=2025-04-01-preview",
+    endpoint: "/maas/openai/openai/images/generations?api-version=2025-04-01-preview",
     apiTokenEnvVar: "VITE_QS_GPT_IMAGE_2_API_KEY",
     maxReferenceImages: 1,
     supportedAspectRatios: ["1:1", "16:9", "9:16"],
@@ -81,6 +81,34 @@ export const MODEL_CONFIGS: Record<ModelType, ModelConfig> = {
     supportedOutputFormats: ["jpeg", "png"],
     defaultOutputFormat: "jpeg",
     estimatedTimeSeconds: 20,
+  },
+  "v-api-gpt-image-2": {
+    id: "v-api-gpt-image-2",
+    name: "V-API GPT Image 2",
+    description: "V-API 平台的 GPT Image 2 模型，支持图片编辑功能",
+    provider: "other",
+    endpoint: "https://api.v3.cm/v1/images/edits",
+    apiTokenEnvVar: "VITE_V_API_GPT_IMAGE_2_API_KEY",
+    maxReferenceImages: 1,
+    supportedAspectRatios: ["1:1", "16:9", "9:16"],
+    defaultAspectRatio: "9:16",
+    supportedOutputFormats: ["jpeg", "png"],
+    defaultOutputFormat: "jpeg",
+    estimatedTimeSeconds: 20,
+  },
+  "v-api-seedream-4-5": {
+    id: "v-api-seedream-4-5",
+    name: "V-API Seedream 4.5",
+    description: "V-API 平台的 Seedream 4.5 模型，支持 1-10 张图片编辑，支持 2K/4K 多种宽高比",
+    provider: "other",
+    endpoint: "https://api.v3.cm/v1/images/edits",
+    apiTokenEnvVar: "VITE_V_API_SEEDREAM_4_5_API_KEY",
+    maxReferenceImages: 10,
+    supportedAspectRatios: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9"],
+    defaultAspectRatio: "9:16",
+    supportedOutputFormats: ["url", "b64_json"],
+    defaultOutputFormat: "url",
+    estimatedTimeSeconds: 25,
   },
   "other": {
     id: "other",
@@ -113,7 +141,7 @@ export const hasApiKeyForModel = (modelType: ModelType): boolean => {
   const userConfigs = loadUserApiConfig();
   
   // 如果用户已在 UI 中为该模型配置了 API Key，则认为可用
-  if (userConfigs?.[modelType]?.apiKey) {
+  if (userConfigs && modelType in userConfigs && userConfigs[modelType as keyof typeof userConfigs]?.apiKey) {
     return true;
   }
 

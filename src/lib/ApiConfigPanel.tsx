@@ -11,18 +11,22 @@ import {
   clearModelApiConfig
 } from "./userApiConfig";
 
-const MODEL_TYPES: ModelType[] = ["gpt-2", "flux-2-pro", "qs-gpt-image-2"];
+const MODEL_TYPES: ModelType[] = ["gpt-2", "flux-2-pro", "qs-gpt-image-2", "v-api-gpt-image-2", "v-api-seedream-4-5"];
 
 const MODEL_NAMES: Record<ModelType, string> = {
   "gpt-2": "GPT-2 (Kratos)",
   "flux-2-pro": "FLUX.2 [pro] (Replicate)",
   "qs-gpt-image-2": "QS GPT Image 2",
+  "v-api-gpt-image-2": "V-API GPT Image 2",
+  "v-api-seedream-4-5": "V-API Seedream 4.5",
 };
 
 const MODEL_HINTS: Record<ModelType, string> = {
   "gpt-2": "需要小红书 Kratos 平台的 API Token",
   "flux-2-pro": "需要 Replicate 平台的 API Token",
   "qs-gpt-image-2": "需要小红书 QS 平台的 API Key",
+  "v-api-gpt-image-2": "需要 V-API 平台的 API Key",
+  "v-api-seedream-4-5": "需要 V-API 平台的 API Key（Seedream 4.5）",
 };
 
 export function ApiConfigPanel() {
@@ -31,6 +35,8 @@ export function ApiConfigPanel() {
     "gpt-2": false,
     "flux-2-pro": false,
     "qs-gpt-image-2": false,
+    "v-api-gpt-image-2": false,
+    "v-api-seedream-4-5": false,
   });
   const [modelType, setModelType] = useState<ModelType>("flux-2-pro");
   const [apiKey, setApiKey] = useState("");

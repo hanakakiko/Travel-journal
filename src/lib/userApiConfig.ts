@@ -3,7 +3,7 @@
  * 允许用户为每个模型输入自己的 API Key 和自定义端点
  */
 
-export type ModelType = "gpt-2" | "flux-2-pro" | "qs-gpt-image-2";
+export type ModelType = "gpt-2" | "flux-2-pro" | "qs-gpt-image-2" | "v-api-gpt-image-2" | "v-api-seedream-4-5";
 
 export type ModelApiConfig = {
   /** 用户提供的 API Key */
