@@ -1,9 +1,12 @@
-import { edgeStyleOptions, sceneOptions, stylePresets, templatePresets } from "../data/presets";
+import { edgeStyleOptions, sceneOptions, stylePresets, templatePresets, moodOptions, narratorOptions, paletteOptions, vibeOptions, layoutShapeOptions, decorationOptions, paperOptions } from "../data/presets";
 import type { JournalDraft, JournalPage, PhotoAsset, StyleId, TemplateId, UserAnswers } from "../types";
 import { formatDate } from "./format";
 import { callModelAPI } from "./modelRouter";
 import { loadUserApiConfig } from "./userApiConfig";
 import { getApiKey } from "./api-keys.local";
+
+/** 从数组中随机选择一个元素 */
+const randomPick = <T,>(items: T[]): T => items[Math.floor(Math.random() * items.length)];
 
 /** 控制 console 调试日志开关：开发模式默认开。 */
 const DEBUG_ENABLED = import.meta.env.DEV;
@@ -267,13 +270,44 @@ const collectSceneFacts = (answers: UserAnswers): Array<{ label: string; value: 
 /**
  * 把当前 scene 的补充字段（如目的地 / 天气 / 同行）拼成中文短语。
  * 字段顺序遵循 sceneOptions 中的声明，且只输出用户填了内容的项。
+ * 用故事化的语言描述，避免直接列举标签。
  */
 const buildSceneDetailPhrase = (answers: UserAnswers): string => {
   const sceneConfig = sceneOptions.find((scene) => scene.name === answers.scene);
   const facts = collectSceneFacts(answers);
   if (!sceneConfig || !facts.length) return "";
-  const joined = facts.map((f) => `${f.label}：${f.value}`).join("；");
-  return `场景细节（${sceneConfig.tag}）—— ${joined}。`;
+  
+  // 用更自然的叙述方式组织场景细节，避免重复"场景细节"这样的词
+  const narratives: string[] = [];
+  
+  for (const fact of facts) {
+    const { label, value } = fact;
+    
+    // 根据字段类型用不同的叙述方式
+    if (label === "目的地" || label === "街区 / 商圈") {
+      narratives.push(`这段经历发生在${value}`);
+    } else if (label === "行程" || label === "路线感觉") {
+      narratives.push(`整个过程以${value}的方式展开`);
+    } else if (label === "同行人" || label === "陪伴者") {
+      narratives.push(`${value}一起经历了这段时光`);
+    } else if (label === "主要交通" || label === "交通方式") {
+      narratives.push(`通过${value}的方式往来`);
+    } else if (label === "天气" || label === "天气状况") {
+      narratives.push(`当时的天气是${value}`);
+    } else if (label === "印象最深" || label === "停留过的小店" || label === "亮点") {
+      narratives.push(`其中最难忘的是${value}`);
+    } else if (label === "季节" || label === "时间") {
+      narratives.push(`发生在${value}`);
+    } else if (label === "活动" || label === "主要活动") {
+      narratives.push(`主要围绕${value}展开`);
+    } else {
+      // 默认格式
+      narratives.push(`${label}是${value}`);
+    }
+  }
+  
+  if (!narratives.length) return "";
+  return `${sceneConfig.tag}的背景故事：${narratives.join("；")}。`;
 };
 
 /**
@@ -341,6 +375,11 @@ const buildVisionFactsPhrase = (answers: UserAnswers, photoOrder: string[]): str
  */
 const splitEdgeStyles = (answers: UserAnswers): { fixed: string[]; decorative: string[] } => {
   const picked = new Set(answers.edgeStyles ?? []);
+  
+  // 添加自定义标签中的边缘风格
+  const customEdgeStyles = answers.customTags?.["edgeStyles"] ?? [];
+  customEdgeStyles.forEach(tag => picked.add(tag));
+  
   const fixed: string[] = [];
   const decorative: string[] = [];
   for (const opt of edgeStyleOptions) {
@@ -348,22 +387,116 @@ const splitEdgeStyles = (answers: UserAnswers): { fixed: string[]; decorative: s
     if (opt.isFixedShape) fixed.push(opt.label);
     else decorative.push(opt.label);
   }
+  
+  // 处理自定义标签（不在 edgeStyleOptions 中的）
+  // 自定义标签默认作为装饰性边缘处理
+  for (const customTag of customEdgeStyles) {
+    const isInOptions = edgeStyleOptions.some(opt => opt.label === customTag);
+    if (!isInOptions) {
+      decorative.push(customTag);
+    }
+  }
+  
   return { fixed, decorative };
 };
 
-/** 收集所有视觉风味选项（palette/vibes/layoutShapes/edgeStyles/decorations/paperTexture），缺省项不输出。 */
+/** 收集所有视觉风味选项（palette/vibes/layoutShapes/edgeStyles/decorations/paperTexture），缺省项随机选择。 */
 const buildVisualFlavorPhrase = (answers: UserAnswers): string => {
   const parts: string[] = [];
-  if (answers.palette) parts.push(`整体色调=「${answers.palette}」`);
-  if (answers.vibes?.length) parts.push(`氛围标签=「${answers.vibes.join("、")}」`);
-  if (answers.layoutShapes?.length) parts.push(`排版形状偏好=「${answers.layoutShapes.join("、")}」`);
+  
+  // 色调：如果用户没选，随机选一个
+  const selectedPalette = answers.palette || randomPick(paletteOptions).label;
+  parts.push(`整体色调倾向于「${selectedPalette}」的视觉氛围`);
+  
+  // 氛围标签：如果用户没选，随机选 1-2 个
+  const selectedVibes = answers.vibes?.length ? answers.vibes : [randomPick(vibeOptions), randomPick(vibeOptions)];
+  // 添加自定义的 vibes 标签
+  const customVibes = answers.customTags?.["vibes"] ?? [];
+  const allVibes = [...new Set([...selectedVibes, ...customVibes])];
+  
+  const vibeDescriptions: Record<string, string> = {
+    "治愈": "让观者感到舒适放松的视觉语言",
+    "松弛": "自然随意、不刻意的排版节奏",
+    "热烈": "饱满充沛的色彩与情绪表达",
+    "复古": "怀旧年代感的视觉元素与配色",
+    "梦幻": "柔和朦胧、充满想象空间的画面质感",
+    "清爽": "简洁明快、留白充足的版式设计",
+    "温暖": "暖色调与亲切感的视觉营造",
+    "神秘": "深沉内敛、引人思考的视觉表现",
+    "夏日感": "明亮清爽的夏日氛围",
+    "冬日感": "冷调宁静的冬日意境",
+    "晨间": "清晨柔和的光线与宁静",
+    "深夜": "深夜静谧的神秘感",
+    "公路片": "开阔自由的旅途感",
+    "日系小清新": "日式简约清新的美学",
+    "ins 极简": "极简主义的现代感",
+    "胶片颗粒": "胶片质感的复古韵味",
+    "童话感": "梦幻童话的奇妙世界",
+    "都市感": "城市繁华的现代气息",
+    "野外感": "自然野性的户外气质",
+  };
+  
+  const descriptions = allVibes
+    .map(vibe => vibeDescriptions[vibe] || vibe)
+    .filter(Boolean);
+  
+  if (descriptions.length) {
+    parts.push(`画面应该传达${descriptions.join("、")}的整体感受`);
+  }
+  
+  // 排版形状：如果用户没选，随机选 1-2 个
+  const selectedShapes = answers.layoutShapes?.length ? answers.layoutShapes : [randomPick(layoutShapeOptions).label, randomPick(layoutShapeOptions).label];
+  // 添加自定义的 layoutShapes 标签
+  const customShapes = answers.customTags?.["layoutShapes"] ?? [];
+  const allShapes = [...new Set([...selectedShapes, ...customShapes])];
+  
+  const shapeDescriptions: Record<string, string> = {
+    "经典方形": "拍立得 / 标准矩形的规整感",
+    "圆形 / 椭圆": "圆润柔和的照片轮廓",
+    "爱心 / 异形": "充满温情的心形裁剪",
+    "几何多边形": "现代感的几何形状组合",
+    "沿主体轮廓抠图": "紧贴主体边界的自然裁剪",
+    "局部细节剪贴": "突出细节特写的局部剪贴",
+  };
+  
+  const shapeDescriptionsArray = allShapes
+    .map(shape => shapeDescriptions[shape] || shape)
+    .filter(Boolean);
+  
+  if (shapeDescriptionsArray.length) {
+    parts.push(`照片裁剪采用${shapeDescriptionsArray.join("、")}的设计手法`);
+  }
+  
+  // 边缘风格：分别处理固定形状和装饰性边缘
   const { fixed: fixedEdges, decorative: decoEdges } = splitEdgeStyles(answers);
-  if (fixedEdges.length) parts.push(`固定形状边缘=「${fixedEdges.join("、")}」（自带固定外形，按其固有形态执行，覆盖上方「排版形状偏好」）`);
-  if (decoEdges.length) parts.push(`装饰性边缘=「${decoEdges.join("、")}」（不限制内部形状，叠加在已确定的轮廓之外）`);
-  if (answers.decorations?.length) parts.push(`装饰元素=「${answers.decorations.join("、")}」`);
-  if (answers.paperTexture) parts.push(`底图纸张=「${answers.paperTexture}」`);
+  if (fixedEdges.length) {
+    parts.push(`照片边缘采用「${fixedEdges.join("、")}」的固定形态（按其自带外形执行，覆盖排版形状偏好）`);
+  }
+  if (decoEdges.length) {
+    parts.push(`在照片轮廓外侧叠加「${decoEdges.join("、")}」的装饰性边缘效果`);
+  }
+  
+  // 装饰元素：如果用户没选，随机选 1-2 个
+  const selectedDecorations = answers.decorations?.length ? answers.decorations : [randomPick(decorationOptions).label, randomPick(decorationOptions).label];
+  // 添加自定义的 decorations 标签
+  const customDecorations = answers.customTags?.["decorations"] ?? [];
+  const allDecorations = [...new Set([...selectedDecorations, ...customDecorations])];
+  
+  if (allDecorations.length) {
+    parts.push(`用「${allDecorations.join("、")}」等元素作为版面点缀，围绕主体但不遮挡内容`);
+  }
+  
+  // 纸张底色：如果用户没选，随机选一个
+  const selectedPaper = answers.paperTexture || randomPick(paperOptions).label;
+  parts.push(`整张拼贴的底层纸感采用「${selectedPaper}」的质地与色调`);
+  
+  // 底图颜色：如果用户选了，加入到 prompt
+  if (answers.mainColor) {
+    parts.push(`整张拼贴的底图背景色应该接近「${answers.mainColor}」，照片和装饰元素的色彩可自由丰富搭配`);
+  }
+  
   if (!parts.length) return "";
-  return `用户「视觉风味」偏好（请在生成时严格按这些偏好执行——色调倾向 / 氛围 / 排版裁剪 / 边缘风格 / 装饰元素 / 纸张底色）：${parts.join("；")}。`;
+  return `用户的视觉风味偏好指导：${parts.join("；")}。`;
 };
 
 /**
@@ -382,24 +515,30 @@ const buildPipelinePhrase = (answers: UserAnswers): string => {
 
   let edgeSegment: string;
   if (fixed.length && decorative.length) {
-    edgeSegment = `④ 照片边缘风格（独立维度，不是「形状」）：本次同时选择了「固定形状边缘」（${fixed.join("、")}）与「装饰性边缘」（${decorative.join("、")}）——请用「固定形状边缘」覆盖第 ③ 段的形状偏好按其固有外形（如电影胶片必为横长条带感光孔、宝丽得必为白边方框）渲染主轮廓；再把「装饰性边缘」叠加在轮廓外侧（如外面再裹一圈撕纸边或和纸胶带）；`;
+    edgeSegment = `④ 照片边缘处理：采用「${fixed.join("、")}」作为主轮廓的固定外形（如电影胶片的横长条带、宝丽得的白边方框），再在外侧叠加「${decorative.join("、")}」的装饰效果；`;
   } else if (fixed.length) {
-    edgeSegment = `④ 照片边缘风格（独立维度，不是「形状」）：本次选择了「固定形状边缘」（${fixed.join("、")}）——请按该边缘的固有外形（如电影胶片必为横长条带感光孔、相框必为方框、宝丽得必为白边方框、取景器必为带四角的方形）渲染照片，覆盖第 ③ 段的形状偏好；`;
+    edgeSegment = `④ 照片边缘处理：按「${fixed.join("、")}」的固有外形渲染照片轮廓（如电影胶片为横长条带感光孔、相框为方框、宝丽得为白边方框、取景器为带四角的方形），这会覆盖排版形状的设定；`;
   } else if (decorative.length) {
-    edgeSegment = `④ 照片边缘风格（独立维度，不是「形状」）：本次选择了「装饰性边缘」（${decorative.join("、")}）——保持第 ③ 段确定的内部形状不变，仅在轮廓外侧叠加该边缘装饰（如「圆形」+「撕纸边」表示圆形照片外面再裹一圈撕纸感）；`;
+    edgeSegment = `④ 照片边缘处理：保持排版形状不变，仅在轮廓外侧叠加「${decorative.join("、")}」的装饰效果（如圆形照片外面再裹一圈撕纸感）；`;
   } else {
-    edgeSegment = "④ 照片边缘风格：用户未指定，按第 ③ 段的形状偏好直接渲染干净边缘即可，不要自创相框/胶片/撕纸等额外边缘元素；";
+    // 如果用户没选边缘风格，随机选一个
+    const randomEdgeStyle = randomPick(edgeStyleOptions);
+    if (randomEdgeStyle.isFixedShape) {
+      edgeSegment = `④ 照片边缘处理：按「${randomEdgeStyle.label}」的固有外形渲染照片轮廓，这会覆盖排版形状的设定；`;
+    } else {
+      edgeSegment = `④ 照片边缘处理：保持排版形状不变，仅在轮廓外侧叠加「${randomEdgeStyle.label}」的装饰效果；`;
+    }
   }
 
   return [
-    "请按以下 7 段处理流程串联生成（每一段都不要遗漏）：",
-    "① 照片理解：优先采纳「照片自动识别」中给到的 scene/tone/mood/keywords，将其作为画面真实信息来源；",
-    "② 故事编排：按 EXIF 时间顺序（若可推断）或自然叙事顺序串联多张图，整体围绕「主题场景 + 标题」组织一条情绪线；",
-    "③ 智能排版：严格按用户的「排版形状偏好」对照片做裁剪/拼贴（圆形/爱心/几何/沿主体抠图/局部细节剪贴等内部轮廓），未声明偏好时使用与场景匹配的克制矩形；注意此处只决定「形状本身」，不要加任何边缘装饰；",
+    "生成流程（请逐段执行，不要遗漏）：",
+    "① 照片理解：优先采纳「照片自动识别」中的内容标签、色调、情绪、关键词，作为画面的真实信息基础；",
+    "② 故事串联：按 EXIF 时间顺序（若可推断）或自然叙事逻辑串联多张图，围绕「主题场景 + 标题」组织一条完整的情绪线索；",
+    "③ 照片裁剪：严格按用户的排版形状偏好对照片做裁剪/拼贴（圆形/爱心/几何/沿主体抠图/局部细节等），未指定时用与场景匹配的矩形；此段只决定形状本身，不加任何边缘装饰；",
     edgeSegment,
-    "⑤ 文案生成：按「叙述方式」和「氛围标签」写 1-3 段短句作为版面辅文（每段 ≤ 14 字），避免长段落；所有可见文字必须落在文字白名单内；",
-    "⑥ 装饰元素：仅添加用户「装饰元素」列表中的元素，没列出的元素不要自创；元素位置围绕但不要遮挡主体；",
-    "⑦ 底图融合：使用用户选择的「底图纸张」作为整张图的纸感底色 / 纹理；未选择时用与色调匹配的中性纸纹。",
+    "⑤ 文案编写：根据叙述方式和氛围偏好，写 1-3 段短句作为版面辅文（每段不超过 14 字），避免长段落；所有可见文字必须从白名单中选取；",
+    "⑥ 点缀装饰：仅使用用户指定的装饰元素，不要自创；元素位置围绕主体但不遮挡内容；",
+    "⑦ 纸张底层：用用户选择的纸张纹理作为整张拼贴的底色和质感；未选择时用与色调匹配的中性纸纹。",
   ].join(" ");
 };
 
@@ -412,8 +551,18 @@ export const buildKratosPrompt = (
 ) => {
   const styleName = stylePresets.find((preset) => preset.id === styleId)?.name ?? "自定义风格";
   const templateName = templatePresets.find((preset) => preset.id === templateId)?.name ?? "图文手帐";
-  const title = answers.titleSeed.trim() || `${answers.scene}手帐`;
-  const moodPart = answers.mood.length ? answers.mood.join("、") : "松弛";
+  
+  // 处理标题：如果用户没填，则不包含标题块
+  const userTitle = answers.titleSeed.trim();
+  const title = userTitle || `${answers.scene}手帐`;
+  const hasUserTitle = Boolean(userTitle);
+  
+  // 处理情绪关键词：如果用户没选，随机选一个
+  const moodPart = answers.mood.length ? answers.mood.join("、") : randomPick(moodOptions);
+  
+  // 处理叙述者口吻：如果用户没选，随机选一个
+  const narratorPart = answers.narrator || randomPick(narratorOptions);
+  
   const densityPart = answers.density === "rich" ? "信息密集、贴纸繁复" : "克制均衡、留白舒展";
   const detailPhrase = buildSceneDetailPhrase(answers);
   const facts = collectSceneFacts(answers);
@@ -422,45 +571,70 @@ export const buildKratosPrompt = (
   const visionPhrase = buildVisionFactsPhrase(answers, photoIds.slice(0, photoCount));
   const flavorPhrase = buildVisualFlavorPhrase(answers);
   const pipelinePhrase = buildPipelinePhrase(answers);
+  
+  // 处理倾诉记录：支持两个独立的选项
+  const hasConfession = answers.confessionText?.trim();
+  const confessionAsStyleGuide = (answers.includeConfessionInImage ?? true) && hasConfession;  // 默认 true
+  const confessionAsContent = (answers.showConfessionInImage ?? false) && hasConfession;       // 默认 false
 
   // 「事实清单」段：只列出用户真实给到的信息
   const factSummary = [
     `主题场景：${answers.scene}`,
-    `叙述者口吻：${answers.narrator}`,
+    `叙述者口吻：${narratorPart}`,
     `情绪关键词：${moodPart}`,
-    `标题文案：${title}`,
+    hasUserTitle ? `标题文案：${title}` : null,
     hasUserDetails ? `用户补充的场景细节：${facts.map((f) => `${f.label}=${f.value}`).join("、")}` : null,
+    confessionAsContent ? `用户的倾诉记录：${hasConfession}` : null,
   ]
     .filter(Boolean)
     .join("；");
 
   // 「禁止幻觉」段：明确黑名单
+  // 如果倾诉记录作为风格指导，则去掉文字白名单限制
+  const textConstraint = confessionAsStyleGuide
+    ? `2) 所有可见文字（标题、贴纸、盖章、边注、票根、地图标注）可从白名单中选取，也可根据用户倾诉记录的关键词和情绪自由创作，但不要直接引用倾诉内容本身；`
+    : `2) 所有可见文字（标题、贴纸、盖章、边注、票根、地图标注）只能从白名单中选取：[${whitelist.join(" / ")}]。若某处需要文字但白名单不足，改用图形、线条、抽象符号占位，绝不发明新词、新地名或假英文；`;
+
   const antiHallucination = [
-    "严格遵守以下约束：",
-    "1) 画面内容必须严格基于「我提供的参考图」+「事实清单」+「照片自动识别」结果，禁止凭空添加用户未声明的人名、地名、城市、国家、坐标、街道、建筑、店铺、品牌 logo、菜品名、日期、年份、相机型号、镜头参数、票根编号、行程编号等任何具体信息；",
-    `2) 图中出现的任何文字（标题、贴纸、盖章、边注、票根上的字、地图标注）只能从「文字白名单」中挑选：[${whitelist.join(" / ")}]。如果某个位置实在需要文字但白名单覆盖不到，请改用图形/线条/抽象符号占位，绝不要发明新的词、新地名或假英文；`,
-    "3) 不要写真实的经纬度、不要画真实地图的可辨识轮廓、不要伪造 EXIF 数值；如需呈现「相机参数感」请使用模糊的占位排版（如 ƒ/· · · 、ISO --- ），不要写出具体数字；",
+    "内容约束（必须严格遵守）：",
+    "1) 画面内容必须严格基于参考图、事实清单、照片自动识别的结果，禁止凭空添加用户未声明的人名、地名、城市、国家、坐标、街道、建筑、店铺、品牌、菜品名、日期、年份、相机型号、镜头参数等具体信息；",
+    textConstraint,
+    "3) 不要写经纬度、不要画真实地图轮廓、不要伪造 EXIF 数值；若需呈现参数感，用模糊占位（如 ƒ/· · · 、ISO ---），不要具体数字；",
     hasUserDetails
-      ? "4) 用户已经提供的场景细节请优先体现在画面中（如目的地决定主色调或地标剪影、天气决定光线、同行人决定人物数量轮廓），但仍以照片中可见内容为最高优先级；"
-      : "4) 用户本次没有补充场景细节，请仅依据参考图本身的氛围 + 视觉风味偏好生成，不要替用户「想象」地点、人物关系或行程；",
-    "5) 如果参考图信息不足以填满版面，请用纸纹、胶带、留白、几何贴纸等无信息元素补足，不要用「看似真实但实为虚构」的内容凑数；",
-    "6a) 「装饰元素」必须从用户给出的清单中取，未列出的元素不允许自创；「排版形状偏好」也必须遵守用户选择；",
-    "6b) 「照片边缘风格」是与「形状」正交的独立维度，绝不允许把「撕纸边/相框/电影胶片/取景器/宝丽得白边/贴纸描边/羽化柔边/和纸胶带」当作形状渲染——它们只能作为边缘装饰存在；同理，也不要在「形状段」里自创任何边缘元素；当用户选择了「固定形状边缘」（电影胶片/相框/取景器/宝丽得白边）时，应让其覆盖用户的形状偏好按边缘自带外形执行；",
-    "7) 「底图纸张」决定整张拼贴的纸感底层，请覆盖到画面外围与所有图片之间的缝隙，让最终视觉是「贴在这张纸上的手帐」。",
+      ? "4) 用户提供的场景细节（目的地、天气、同行人等）可优先体现在画面中，但参考图的可见内容永远是最高优先级；"
+      : "4) 用户未补充场景细节，请仅依据参考图本身的氛围和视觉风味生成，不要替用户想象地点、人物或行程；",
+    confessionAsContent
+      ? "5) 用户的倾诉记录必须作为实际内容显示在画面中（可作为边注、贴纸、标签或其他文字形式），这是画面的核心信息，不能省略；"
+      : "5) 若参考图不足以填满版面，用纸纹、胶带、留白、几何贴纸等无信息元素补足，不要用虚构内容凑数；",
+    "6) 装饰元素必须从用户清单中取，排版形状也必须遵守用户选择，不允许自创；",
+    "7) 照片边缘风格（撕纸边、相框、电影胶片、取景器、宝丽得白边、贴纸描边、羽化柔边、和纸胶带）是独立维度，只能作为边缘装饰，不能当作形状渲染；固定形状边缘会覆盖排版形状偏好；",
+    "8) 底图纸张决定整张拼贴的纸感底层，覆盖到画面外围与图片间的缝隙，让最终视觉是「贴在这张纸上的手帐」。",
   ].join(" ");
 
+  // 倾诉记录作为风格指导的短语
+  const confessionStylePhrase = confessionAsStyleGuide
+    ? `用户的倾诉记录（作为情绪和风格指导，可自由提取关键词用于文案）：「${hasConfession}」。请根据这段话的情绪、关键词和氛围来调整画面的整体风格和文案内容，但不要直接引用或写出这段话的原文。`
+    : "";
+
+  // 倾诉记录作为实际内容的强制指令
+  const confessionContentPhrase = confessionAsContent
+    ? `【重要】用户的倾诉记录必须在画面中呈现：「${hasConfession}」。这段话是画面的核心内容，请将其以合适的形式（边注、贴纸、标签、手写感文字等）融入手帐拼贴中，确保观者能清晰看到这段倾诉。`
+    : "";
+
   return [
-    `任务：基于我提供的 ${photoCount} 张参考图片，生成一张「${title}」主题的手帐拼贴图。`,
-    "画面形态：优先输出竖向长图（类似手机长截图、手帐长卷），允许把多张参考图、票根、贴纸、文字标签自上而下错落堆叠；具体纵横比与构图请按手帐美学自由发挥，不要被任何固定尺寸框住。",
-    `视觉风格：${styleName}；版式参照：${templateName}；版式密度：${densityPart}。`,
+    hasUserTitle ? `任务：基于 ${photoCount} 张参考图片，创作一张「${title}」主题的手帐拼贴。` : `任务：基于 ${photoCount} 张参考图片，创作一张手帐拼贴。`,
+    "形态：竖向长图（手机长截图、手帐长卷风格），参考图、票根、贴纸、文字标签自上而下错落堆叠；纵横比与构图按手帐美学自由发挥，不受固定尺寸限制。",
+    `风格定位：${styleName}；版式参照：${templateName}；密度：${densityPart}。`,
     pipelinePhrase,
-    `事实清单（只能使用以下信息，未列出的一律视为未知）：${factSummary}。`,
+    `信息基础（仅能使用以下内容，其他视为未知）：${factSummary}。`,
+    confessionStylePhrase,
+    confessionContentPhrase,
     visionPhrase,
     flavorPhrase,
     detailPhrase,
-    "画面构成：把参考图、票根、贴纸、文字标签自然地融合到同一张拼贴上，保留拍摄氛围；元信息区（时间、地点、参数）只做版式占位，不要写具体数值。",
+    "视觉融合：参考图、票根、贴纸、文字标签自然融合成一张拼贴，保留原始拍摄氛围；元信息区（时间、地点、参数）仅做版式占位，不写具体数值。",
     antiHallucination,
-    `标题文字必须且只能使用：「${title}」。`,
+    hasUserTitle ? `标题必须且仅使用：「${title}」。` : null,
   ]
     .filter(Boolean)
     .join(" ");

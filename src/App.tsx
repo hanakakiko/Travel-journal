@@ -10,8 +10,10 @@ import {
   Link as LinkIcon,
   Loader2,
   Palette,
+  Save,
   Sparkles,
   Tag,
+  Trash2,
   Volume2,
   VolumeX,
   X,
@@ -24,6 +26,7 @@ import {
   decorationOptions,
   edgeStyleOptions,
   layoutShapeOptions,
+  mainColorOptions,
   moodOptions,
   narratorOptions,
   paletteOptions,
@@ -39,23 +42,34 @@ import { buildKratosPrompt, requestJournalDraft } from "./lib/modelClient";
 import { createSampleFiles } from "./lib/samplePhotos";
 import { playSound, type SoundEffect } from "./lib/soundEffects";
 import { recognizePhotoBatch } from "./lib/visionClient";
-import type { JournalDraft, PhotoAsset, StyleId, TemplateId, UserAnswers } from "./types";
+import type { JournalDraft, PhotoAsset, StyleId, TemplateId, UserAnswers, SavedTemplate } from "./types";
 import { getAvailableModels, hasApiKeyForModel, MODEL_CONFIGS, type ModelType } from "./lib/modelConfig";
+import { getAllTemplates, saveTemplate, deleteTemplate } from "./lib/templateManager";
+import { EditableTagGroup } from "./components/EditableTagGroup";
+import { addTag, removeTag } from "./lib/tagManager";
+import { getAllCustomTags, saveCustomTags } from "./lib/customTagsStorage";
 
 const defaultAnswers: UserAnswers = {
-  scene: "一次旅程",
-  mood: ["怀旧", "像电影"],
-  narrator: "像一本精致生活杂志",
-  density: "rich",
-  titleSeed: "",
-  details: {},
-  vibes: [],
-  layoutShapes: [],
-  edgeStyles: [],
-  decorations: [],
-  visionTags: {},
-  selectedModel: "flux-2-pro",  // 默认使用 FLUX.2 Pro
-};
+   scene: "一次旅程",
+   mood: ["怀旧", "像电影"],
+   narrator: "像一本精致生活杂志",
+   density: "rich",
+   titleSeed: "",
+   details: {},
+   vibes: [],
+   layoutShapes: [],
+   edgeStyles: [],
+   decorations: [],
+   visionTags: {},
+   customTags: {},  // 不在这里初始化，在 useState 中动态获取
+   selectedModel: "flux-2-pro",  // 默认使用 FLUX.2 Pro
+   confessionText: "",
+   includeConfessionInImage: true,  // 默认勾选"融入画面生成"
+   showConfessionInImage: false,    // 默认不勾选"放在画面中"
+   palette: undefined,
+   paperTexture: undefined,
+   mainColor: undefined,
+ };
 
 /** 多选 chip 值的序列化分隔符，统一存到 details[key] 里。 */
 const MULTI_SEP = "、";
@@ -74,7 +88,10 @@ const downloadDataUrl = (dataUrl: string, filename: string) => {
 
 function App() {
    const [photos, setPhotos] = useState<PhotoAsset[]>([]);
-   const [answers, setAnswers] = useState<UserAnswers>(defaultAnswers);
+   const [answers, setAnswers] = useState<UserAnswers>(() => ({
+     ...defaultAnswers,
+     customTags: getAllCustomTags(),
+   }));
    const [styleId, setStyleId] = useState<StyleId>("auto");
    const [templateId, setTemplateId] = useState<TemplateId>("collage");
    const [draft, setDraft] = useState<JournalDraft | null>(null);
@@ -85,6 +102,7 @@ function App() {
    /** 记录当前错误是否来自 COS 上传失败（用于判断是否显示重试按钮） */
    const [failedPhotosForRetry, setFailedPhotosForRetry] = useState<PhotoAsset[]>([]);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isPhotoManagerOpen, setIsPhotoManagerOpen] = useState(false);
   /**
    * 「手绘中」遮罩的持久挂载状态：
    *   - isGenerating 为 true 时立即挂载（enter 动画）；
@@ -106,14 +124,52 @@ function App() {
       return true;
     }
   });
+  const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>(() => getAllTemplates());
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
 
   const activeStyle = draft?.styleId ?? (styleId === "auto" ? "elegant" : styleId);
   const play = (effect: SoundEffect) => playSound(effect, soundEnabled);
 
+  const handleSaveTemplate = (name: string, coverImageUrl?: string) => {
+    const newTemplate = saveTemplate(name, answers, styleId, templateId, coverImageUrl);
+    setSavedTemplates((current) => [...current, newTemplate]);
+    play("success");
+  };
+
+  const handleApplyTemplate = (template: SavedTemplate) => {
+    setAnswers(template.answers);
+    setStyleId(template.styleId);
+    setTemplateId(template.templateId);
+    setDraft(null);
+    
+    // 恢复模板中的自定义标签到 localStorage
+    if (template.answers.customTags) {
+      saveCustomTags(template.answers.customTags);
+    }
+    
+    play("tap");
+  };
+
+  const handleDeleteTemplate = (templateId: string) => {
+    deleteTemplate(templateId);
+    setSavedTemplates((current) => current.filter((t) => t.id !== templateId));
+    play("tap");
+  };
+
+  // 监听 localStorage 变化，确保模板列表始终同步
   useEffect(() => {
-    document.body.classList.toggle("modal-open", isInfoOpen);
+    const handleStorageChange = () => {
+      setSavedTemplates(getAllTemplates());
+    };
+    
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle("modal-open", isInfoOpen || isPhotoManagerOpen);
     return () => document.body.classList.remove("modal-open");
-  }, [isInfoOpen]);
+  }, [isInfoOpen, isPhotoManagerOpen]);
 
   useEffect(() => {
     if (!isInfoOpen) return;
@@ -280,12 +336,73 @@ function App() {
     });
   };
 
+  /** 获取某个字段的默认标签 */
+  const getDefaultTagsForField = (fieldKey: string): string[] => {
+    switch (fieldKey) {
+      case "vibes":
+        return vibeOptions;
+      case "layoutShapes":
+        return layoutShapeOptions.map((opt) => opt.label);
+      case "edgeStyles":
+        return edgeStyleOptions.map((opt) => opt.label);
+      case "decorations":
+        return decorationOptions.map((opt) => opt.label);
+      default:
+        return [];
+    }
+  };
+
   /** 单选：palette / paperTexture。同值再次点击则清空。 */
   const setSingleChoice = (key: "palette" | "paperTexture", value: string) => {
     setAnswers((current) => ({
       ...current,
       [key]: current[key] === value ? undefined : value,
     }));
+  };
+
+  /** 添加自定义标签 */
+  const handleAddCustomTag = (fieldKey: string, newTag: string) => {
+    setAnswers((current) => {
+      const customTags = current.customTags ?? {};
+      const fieldTags = customTags[fieldKey] ?? [];
+      const updated = addTag(newTag, fieldTags);
+      const nextCustomTags = { ...customTags, [fieldKey]: updated };
+      
+      // 保存到 localStorage
+      saveCustomTags(nextCustomTags);
+      
+      return {
+        ...current,
+        customTags: nextCustomTags,
+      };
+    });
+  };
+
+  /** 删除自定义标签 */
+  const handleRemoveCustomTag = (fieldKey: string, tag: string, defaultTags: string[]) => {
+    setAnswers((current) => {
+      const customTags = current.customTags ?? {};
+      const fieldTags = customTags[fieldKey] ?? [];
+      const selectedTags = current[fieldKey as keyof UserAnswers] as string[] | undefined;
+      
+      const { customTags: updatedCustom, selectedTags: updatedSelected } = removeTag(
+        tag,
+        defaultTags,
+        fieldTags,
+        selectedTags
+      );
+      
+      const nextCustomTags = { ...customTags, [fieldKey]: updatedCustom };
+      
+      // 保存到 localStorage
+      saveCustomTags(nextCustomTags);
+      
+      return {
+        ...current,
+        customTags: nextCustomTags,
+        [fieldKey]: updatedSelected,
+      };
+    });
   };
 
   /**
@@ -332,6 +449,22 @@ function App() {
       else delete next[photoId];
       return { ...current, visionTags: next };
     });
+  };
+
+  /** 删除指定索引的图片 */
+  const deletePhoto = (index: number) => {
+    const photoToDelete = photos[index];
+    setPhotos((current) => current.filter((_, i) => i !== index));
+    setRemoteUrls((current) => current.filter((_, i) => i !== index));
+    // 同时清除该图片的 VLM 标签
+    if (photoToDelete) {
+      setAnswers((current) => {
+        const all = current.visionTags ?? {};
+        const next = { ...all };
+        delete next[photoToDelete.id];
+        return { ...current, visionTags: next };
+      });
+    }
   };
 
   const generateJournal = async (closeAfter = false) => {
@@ -505,22 +638,39 @@ function App() {
             </div>
 
             <div className="upload-actions">
-              <label className={classNames("upload-drop", isProcessing && "is-busy")} onPointerDown={() => play("tap")}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(event) => {
-                    void handleFiles(event.currentTarget.files);
-                    event.currentTarget.value = "";
+              {photos.length > 0 ? (
+                <button
+                  className={classNames("upload-drop", isProcessing && "is-busy")}
+                  type="button"
+                  onClick={() => {
+                    play("tap");
+                    setIsPhotoManagerOpen(true);
                   }}
-                />
-                <span className="upload-mark">
-                  {isProcessing ? <Loader2 className="spin" size={22} /> : <ImagePlus size={22} />}
-                </span>
-                <span className="upload-title">{photos.length ? "继续添加" : "选择照片"}</span>
-                <span className="upload-meta">{photos.length ? "再放几张到画桌上" : "多张图片一起装订"}</span>
-              </label>
+                >
+                  <span className="upload-mark">
+                    {isProcessing ? <Loader2 className="spin" size={22} /> : <ImagePlus size={22} />}
+                  </span>
+                  <span className="upload-title">增删画面</span>
+                  <span className="upload-meta">管理已上传的图片</span>
+                </button>
+              ) : (
+                <label className={classNames("upload-drop", isProcessing && "is-busy")} onPointerDown={() => play("tap")}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(event) => {
+                      void handleFiles(event.currentTarget.files);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                  <span className="upload-mark">
+                    {isProcessing ? <Loader2 className="spin" size={22} /> : <ImagePlus size={22} />}
+                  </span>
+                  <span className="upload-title">选择照片</span>
+                  <span className="upload-meta">多张图片一起装订</span>
+                </label>
+              )}
               <button className="sample-action" type="button" onClick={loadSamples} disabled={isProcessing}>
                 <Sparkles size={16} />
                 <span>借用练习素材</span>
@@ -562,6 +712,20 @@ function App() {
         )}
       </section>
 
+      {isPhotoManagerOpen && (
+        <PhotoManagerModal
+          photos={photos}
+          isProcessing={isProcessing}
+          onClose={() => {
+            play("paper");
+            setIsPhotoManagerOpen(false);
+          }}
+          onAddPhotos={handleFiles}
+          onDeletePhoto={deletePhoto}
+          onSound={play}
+        />
+      )}
+
       {photos.length > 0 && isInfoOpen && (
         <InfoModal
           answers={answers}
@@ -574,6 +738,8 @@ function App() {
           templateId={templateId}
           isVisionLoading={isVisionLoading}
           visionError={visionError}
+          savedTemplates={savedTemplates}
+          showTemplateManager={showTemplateManager}
           onClose={() => {
             play("paper");
             setIsInfoOpen(false);
@@ -592,12 +758,23 @@ function App() {
           onRecognizePhotos={() => void recognizePhotos()}
           onRemoveVisionTag={removeVisionTag}
           onSound={play}
+          onApplyTemplate={handleApplyTemplate}
+          onDeleteTemplate={handleDeleteTemplate}
+          onToggleTemplateManager={() => setShowTemplateManager(!showTemplateManager)}
+          onAddCustomTag={handleAddCustomTag}
+          onRemoveCustomTag={handleRemoveCustomTag}
         />
       )}
 
       {draft && (
         <section className="book-band">
-          <GeneratedShowcase draft={draft} onDownload={downloadGeneratedImage} />
+          <GeneratedShowcase
+            draft={draft}
+            answers={answers}
+            onDownload={downloadGeneratedImage}
+            onSaveTemplate={handleSaveTemplate}
+            onSound={play}
+          />
         </section>
       )}
 
@@ -655,9 +832,22 @@ function ChoiceButton({
 
 export default App;
 
-function GeneratedShowcase({ draft, onDownload }: { draft: JournalDraft; onDownload: () => void }) {
+function GeneratedShowcase({
+  draft,
+  answers,
+  onDownload,
+  onSaveTemplate,
+  onSound,
+}: {
+  draft: JournalDraft;
+  answers: UserAnswers;
+  onDownload: () => void;
+  onSaveTemplate?: (name: string, coverImageUrl?: string) => void;
+  onSound?: (effect: SoundEffect) => void;
+}) {
   const hasImage = Boolean(draft.generatedImageUrl);
   const hasError = Boolean(draft.generationError);
+  const [copiedConfession, setCopiedConfession] = useState(false);
 
   if (!hasImage && !hasError) return null;
 
@@ -666,6 +856,28 @@ function GeneratedShowcase({ draft, onDownload }: { draft: JournalDraft; onDownl
     if (!ms) return "";
     if (ms < 1000) return `${Math.round(ms)}ms`;
     return `${(ms / 1000).toFixed(1)}s`;
+  };
+
+  // 复制倾诉记录到剪贴板
+  const copyConfessionToClipboard = async () => {
+    if (!answers.confessionText) return;
+    try {
+      await navigator.clipboard.writeText(answers.confessionText);
+      setCopiedConfession(true);
+      onSound?.("success");
+      setTimeout(() => setCopiedConfession(false), 2000);
+    } catch {
+      // 降级方案：使用 execCommand
+      const textarea = document.createElement("textarea");
+      textarea.value = answers.confessionText;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setCopiedConfession(true);
+      onSound?.("success");
+      setTimeout(() => setCopiedConfession(false), 2000);
+    }
   };
 
   return (
@@ -684,12 +896,31 @@ function GeneratedShowcase({ draft, onDownload }: { draft: JournalDraft; onDownl
             </small>
           )}
         </div>
-        {hasImage && (
-          <button type="button" className="generated-hero-download" onClick={onDownload}>
-            <ImageDown size={16} />
-            <span>下载图</span>
-          </button>
-        )}
+        <div style={{ display: "flex", gap: "0.5em", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {hasImage && (
+            <button type="button" className="generated-hero-download" onClick={onDownload}>
+              <ImageDown size={16} />
+              <span>下载图</span>
+            </button>
+          )}
+          {onSaveTemplate && (
+            <button
+              type="button"
+              className="generated-hero-download"
+              onClick={() => {
+                const name = window.prompt("请输入模板名称（保存本次的选项配置）：");
+                if (name?.trim()) {
+                  onSaveTemplate(name.trim(), draft.generatedImageUrl);
+                  onSound?.("success");
+                }
+              }}
+              title="保存当前配置为模板，下次可快速应用"
+            >
+              <Save size={16} />
+              <span>保存选项</span>
+            </button>
+          )}
+        </div>
       </header>
 
       {hasImage ? (
@@ -710,63 +941,299 @@ function GeneratedShowcase({ draft, onDownload }: { draft: JournalDraft; onDownl
           <p>{draft.generatedPrompt}</p>
         </details>
       )}
+
+      {/* 倾诉记录展示 */}
+      {answers.confessionText && (
+        <div className="confession-display">
+          <div className="confession-display-header">
+            <h4>💭 今天的倾诉</h4>
+            <button
+              type="button"
+              className="confession-copy-btn"
+              onClick={copyConfessionToClipboard}
+              title="复制到剪贴板"
+            >
+              {copiedConfession ? "已复制 ✓" : "复制"}
+            </button>
+          </div>
+          <p className="confession-display-text">{answers.confessionText}</p>
+        </div>
+      )}
     </section>
   );
 }
 
 function InfoModal({
-  answers,
-  draft,
-  error,
-  isGenerating,
-  photos,
-  remoteUrls,
-  styleId,
-  templateId,
-  isVisionLoading,
-  visionError,
-  onClose,
-  onGenerate,
-  onSetAnswers,
-  onSetRemoteUrl,
-  onSetStyle,
-  onSetTemplate,
-  onToggleMood,
-  onToggleAnswerList,
-  onSetSingleChoice,
-  onRecognizePhotos,
-  onRemoveVisionTag,
-  onSound,
+   answers,
+   draft,
+   error,
+   isGenerating,
+   photos,
+   remoteUrls,
+   styleId,
+   templateId,
+   isVisionLoading,
+   visionError,
+   savedTemplates,
+   showTemplateManager,
+   onClose,
+   onGenerate,
+   onSetAnswers,
+   onSetRemoteUrl,
+   onSetStyle,
+   onSetTemplate,
+   onToggleMood,
+   onToggleAnswerList,
+   onSetSingleChoice,
+   onRecognizePhotos,
+   onRemoveVisionTag,
+   onSound,
+   onApplyTemplate,
+   onDeleteTemplate,
+   onToggleTemplateManager,
+   onAddCustomTag,
+   onRemoveCustomTag,
 }: {
-  answers: UserAnswers;
-  draft: JournalDraft | null;
-  error: string;
-  isGenerating: boolean;
-  photos: PhotoAsset[];
-  remoteUrls: string[];
-  styleId: StyleId;
-  templateId: TemplateId;
-  isVisionLoading: boolean;
-  visionError: string;
-  onClose: () => void;
-  onGenerate: () => void;
-  onSetAnswers: Dispatch<SetStateAction<UserAnswers>>;
-  onSetRemoteUrl: (index: number, value: string) => void;
-  onSetStyle: (style: StyleId) => void;
-  onSetTemplate: (template: TemplateId) => void;
-  onToggleMood: (mood: string) => void;
-  onToggleAnswerList: (key: "vibes" | "layoutShapes" | "edgeStyles" | "decorations", value: string) => void;
-  onSetSingleChoice: (key: "palette" | "paperTexture", value: string) => void;
-  onRecognizePhotos: () => void;
-  onRemoveVisionTag: (photoId: string, tag: string) => void;
-  onSound: (effect: SoundEffect) => void;
+   answers: UserAnswers;
+   draft: JournalDraft | null;
+   error: string;
+   isGenerating: boolean;
+   photos: PhotoAsset[];
+   remoteUrls: string[];
+   styleId: StyleId;
+   templateId: TemplateId;
+   isVisionLoading: boolean;
+   visionError: string;
+   savedTemplates: SavedTemplate[];
+   showTemplateManager: boolean;
+   onClose: () => void;
+   onGenerate: () => void;
+   onSetAnswers: Dispatch<SetStateAction<UserAnswers>>;
+   onSetRemoteUrl: (index: number, value: string) => void;
+   onSetStyle: (style: StyleId) => void;
+   onSetTemplate: (template: TemplateId) => void;
+   onToggleMood: (mood: string) => void;
+   onToggleAnswerList: (key: "vibes" | "layoutShapes" | "edgeStyles" | "decorations", value: string) => void;
+   onSetSingleChoice: (key: "palette" | "paperTexture", value: string) => void;
+   onRecognizePhotos: () => void;
+   onRemoveVisionTag: (photoId: string, tag: string) => void;
+   onSound: (effect: SoundEffect) => void;
+   onApplyTemplate: (template: SavedTemplate) => void;
+   onDeleteTemplate: (templateId: string) => void;
+   onToggleTemplateManager: () => void;
+   onAddCustomTag: (fieldKey: string, newTag: string) => void;
+   onRemoveCustomTag: (fieldKey: string, tag: string, defaultTags: string[]) => void;
 }) {
-  return (
-    <div className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="journal-modal-title">
-      <button className="modal-backdrop" type="button" aria-label="关闭补充信息" onClick={onClose} />
-      <section className="info-modal">
-        <div className="modal-handle" />
-        <div className="speech-bubble">告诉小兔今天想留下什么</div>
+   const [showTemplateSelection, setShowTemplateSelection] = useState(() => savedTemplates.length > 0);
+   const [selectedTemplateDetail, setSelectedTemplateDetail] = useState<SavedTemplate | null>(null);
+
+   // 如果用户点击了查看详情，显示模板详情页面
+   if (selectedTemplateDetail) {
+     return (
+       <TemplateDetailModal
+         template={selectedTemplateDetail}
+         onClose={() => setSelectedTemplateDetail(null)}
+         onApply={() => {
+           onApplyTemplate(selectedTemplateDetail);
+           setShowTemplateSelection(false);
+           setSelectedTemplateDetail(null);
+         }}
+         onDelete={() => {
+           onDeleteTemplate(selectedTemplateDetail.id);
+           setSelectedTemplateDetail(null);
+         }}
+         onSound={onSound}
+       />
+     );
+   }
+
+   // 如果有模板且用户还没选择，显示模板选择界面
+   if (showTemplateSelection && savedTemplates.length > 0) {
+     return (
+       <div className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="template-selection-title">
+         <button className="modal-backdrop" type="button" aria-label="关闭模板选择" onClick={onClose} />
+         <section className="info-modal">
+           <div className="modal-handle" />
+           <div className="speech-bubble">选择一个模板快速开始，或从头开始</div>
+           <header className="modal-header modal-header-slim">
+             <div className="modal-mascot" aria-hidden="true">
+               <span />
+             </div>
+             <button
+               className="icon-button modal-close-floating"
+               type="button"
+               aria-label="关闭"
+               onClick={onClose}
+             >
+               <CircleX size={22} />
+             </button>
+           </header>
+
+           <div className="modal-scroll">
+             <section className="control-band modal-panel">
+               <div className="band-heading">
+                 <span>
+                   <Sparkles size={17} />
+                   保存的模板
+                 </span>
+               </div>
+               <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0.75em" }}>
+                 {savedTemplates.map((template) => (
+                   <div
+                     key={template.id}
+                     style={{
+                       padding: "1em",
+                       border: "1px solid #ddd",
+                       borderRadius: "0.5em",
+                       backgroundColor: "#fafafa",
+                       transition: "all 0.2s ease",
+                       display: "flex",
+                       gap: "0.5em",
+                       alignItems: "center",
+                     }}
+                     onMouseEnter={(e) => {
+                       e.currentTarget.style.backgroundColor = "#f0f0f0";
+                       e.currentTarget.style.borderColor = "#999";
+                     }}
+                     onMouseLeave={(e) => {
+                       e.currentTarget.style.backgroundColor = "#fafafa";
+                       e.currentTarget.style.borderColor = "#ddd";
+                     }}
+                   >
+                     {template.coverImageUrl && (
+                       <img
+                         src={template.coverImageUrl}
+                         alt={template.name}
+                         style={{
+                           width: "60px",
+                           height: "60px",
+                           borderRadius: "0.25em",
+                           objectFit: "cover",
+                           flexShrink: 0,
+                         }}
+                       />
+                     )}
+                     <div style={{ flex: 1, minWidth: 0 }}>
+                       <div style={{ fontWeight: "bold", marginBottom: "0.25em" }}>{template.name}</div>
+                       <div style={{ fontSize: "0.85em", color: "#666" }}>
+                         {new Date(template.createdAt).toLocaleDateString("zh-CN")}
+                       </div>
+                     </div>
+                     <div style={{ display: "flex", gap: "0.5em", flexShrink: 0 }}>
+                       <button
+                         type="button"
+                         onClick={() => {
+                           onSound("tap");
+                           setSelectedTemplateDetail(template);
+                         }}
+                         style={{
+                           padding: "0.5em 0.75em",
+                           fontSize: "0.85em",
+                           border: "1px solid #ddd",
+                           borderRadius: "0.25em",
+                           backgroundColor: "#fff",
+                           cursor: "pointer",
+                           transition: "all 0.2s ease",
+                         }}
+                         onMouseEnter={(e) => {
+                           e.currentTarget.style.backgroundColor = "#f5f5f5";
+                         }}
+                         onMouseLeave={(e) => {
+                           e.currentTarget.style.backgroundColor = "#fff";
+                         }}
+                       >
+                         查看
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => {
+                           onSound("tap");
+                           onApplyTemplate(template);
+                           setShowTemplateSelection(false);
+                         }}
+                         style={{
+                           padding: "0.5em 0.75em",
+                           fontSize: "0.85em",
+                           border: "1px solid #4a90e2",
+                           borderRadius: "0.25em",
+                           backgroundColor: "#4a90e2",
+                           color: "#fff",
+                           cursor: "pointer",
+                           transition: "all 0.2s ease",
+                         }}
+                         onMouseEnter={(e) => {
+                           e.currentTarget.style.backgroundColor = "#357abd";
+                         }}
+                         onMouseLeave={(e) => {
+                           e.currentTarget.style.backgroundColor = "#4a90e2";
+                         }}
+                       >
+                         使用
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => {
+                           if (window.confirm(`确定要删除模板 "${template.name}" 吗？`)) {
+                             onSound("tap");
+                             onDeleteTemplate(template.id);
+                           }
+                         }}
+                         style={{
+                           padding: "0.5em 0.75em",
+                           fontSize: "0.85em",
+                           border: "1px solid #d32f2f",
+                           borderRadius: "0.25em",
+                           backgroundColor: "#fff",
+                           color: "#d32f2f",
+                           cursor: "pointer",
+                           transition: "all 0.2s ease",
+                         }}
+                         onMouseEnter={(e) => {
+                           e.currentTarget.style.backgroundColor = "#ffebee";
+                         }}
+                         onMouseLeave={(e) => {
+                           e.currentTarget.style.backgroundColor = "#fff";
+                         }}
+                         title="删除此模板"
+                       >
+                         <Trash2 size={16} style={{ display: "inline", marginRight: "0.25em" }} />
+                         删除
+                       </button>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             </section>
+           </div>
+
+           <footer className="modal-footer">
+             <button className="secondary-action" type="button" onClick={onClose}>
+               关闭
+             </button>
+             <button
+               className="primary-action"
+               type="button"
+               onClick={() => {
+                 onSound("tap");
+                 setShowTemplateSelection(false);
+               }}
+               style={{ flex: 1 }}
+             >
+               <Brush size={19} />
+               <span>从头开始</span>
+             </button>
+           </footer>
+         </section>
+       </div>
+     );
+   }
+
+   return (
+     <div className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="journal-modal-title">
+       <button className="modal-backdrop" type="button" aria-label="关闭补充信息" onClick={onClose} />
+       <section className="info-modal">
+         <div className="modal-handle" />
+         <div className="speech-bubble">告诉小兔今天想留下什么</div>
         {/*
          * 头部精简：去掉「故事纸条 / 补充画册信息」文案与素材小记 observations，
          * 关闭按钮浮在右上角，mascot 居中作为视觉过渡。
@@ -786,8 +1253,8 @@ function InfoModal({
         </header>
 
         <div className="modal-scroll">
-          {/* 生成模型选择 - 放在最上方 */}
-          <section className="control-band modal-panel">
+           {/* 生成模型选择 - 放在最上方 */}
+           <section className="control-band modal-panel">
             <div className="control-row">
               <div className="band-heading">
                 <span>
@@ -861,13 +1328,16 @@ function InfoModal({
 
             <SceneDetails answers={answers} onSetAnswers={onSetAnswers} />
 
-            <QuestionGroup title="情绪">
-              {moodOptions.map((mood) => (
-                <ChoiceButton key={mood} active={answers.mood.includes(mood)} onClick={() => onToggleMood(mood)} onSound={onSound}>
-                  {mood}
-                </ChoiceButton>
-              ))}
-            </QuestionGroup>
+            <EditableTagGroup
+              title="情绪"
+              defaultTags={moodOptions}
+              customTags={answers.customTags?.mood}
+              selectedTags={answers.mood}
+              onAddTag={(newTag) => onAddCustomTag("mood", newTag)}
+              onRemoveTag={(tag) => onRemoveCustomTag("mood", tag, moodOptions)}
+              onToggleTag={(tag) => onToggleMood(tag)}
+              onSound={onSound}
+            />
 
             <QuestionGroup title="叙述方式">
               {narratorOptions.map((narrator) => (
@@ -881,13 +1351,55 @@ function InfoModal({
                 </ChoiceButton>
               ))}
             </QuestionGroup>
-          </section>
 
-          <VisualFlavorPanel
+            {/* 倾诉记录 - 新增步骤 */}
+            <div className="confession-section">
+              <div className="confession-header">
+                <p className="confession-title">
+                  <span className="confession-emoji">💭</span>
+                  今天的倾诉
+                  <span className="confession-optional">可选</span>
+                </p>
+                <small className="confession-hint">
+                  记录今天的感想、心情、发生的事情…这段话可以帮助 AI 更好地理解你的情绪，也可以只作为个人记录。
+                </small>
+              </div>
+              <textarea
+                className="confession-textarea"
+                value={answers.confessionText ?? ""}
+                onChange={(event) => onSetAnswers((current) => ({ ...current, confessionText: event.target.value }))}
+                placeholder="比如：今天天气很好，和朋友去了海边，虽然有点累但很开心。希望能把这份美好记录下来…"
+                rows={5}
+              />
+              <div className="confession-options">
+                <label className="confession-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={answers.includeConfessionInImage ?? true}
+                    onChange={(event) => onSetAnswers((current) => ({ ...current, includeConfessionInImage: event.target.checked }))}
+                  />
+                  <span>将这段话作为风格指导和关键词提取，融入画面生成</span>
+                </label>
+                <label className="confession-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={answers.showConfessionInImage ?? false}
+                    onChange={(event) => onSetAnswers((current) => ({ ...current, showConfessionInImage: event.target.checked }))}
+                  />
+                  <span>将这段话作为实际内容放在画面中</span>
+                </label>
+              </div>
+            </div>
+           </section>
+
+           <VisualFlavorPanel
             answers={answers}
             onToggleAnswerList={onToggleAnswerList}
             onSetSingleChoice={onSetSingleChoice}
+            onSetAnswers={onSetAnswers}
             onSound={onSound}
+            onAddCustomTag={onAddCustomTag}
+            onRemoveCustomTag={onRemoveCustomTag}
           />
 
           <section className="control-band modal-panel">
@@ -1013,6 +1525,7 @@ function InfoModal({
               onGenerate();
             }}
             disabled={isGenerating}
+            style={{ flex: 1 }}
           >
             {isGenerating ? <Loader2 className="spin" size={19} /> : <BookOpen size={19} />}
             <span>{draft ? "重新装订" : "装订手帐本"}</span>
@@ -1185,16 +1698,26 @@ function SceneDetailControl({
  * 所有项都用 chip 选择，最大化降低用户输入成本。
  */
 function VisualFlavorPanel({
-  answers,
-  onToggleAnswerList,
-  onSetSingleChoice,
-  onSound,
-}: {
-  answers: UserAnswers;
-  onToggleAnswerList: (key: "vibes" | "layoutShapes" | "edgeStyles" | "decorations", value: string) => void;
-  onSetSingleChoice: (key: "palette" | "paperTexture", value: string) => void;
-  onSound: (effect: SoundEffect) => void;
-}) {
+    answers,
+    onToggleAnswerList,
+    onSetSingleChoice,
+    onSetAnswers,
+    onSound,
+    onAddCustomTag,
+    onRemoveCustomTag,
+  }: {
+    answers: UserAnswers;
+    onToggleAnswerList: (key: "vibes" | "layoutShapes" | "edgeStyles" | "decorations", value: string) => void;
+    onSetSingleChoice: (key: "palette" | "paperTexture", value: string) => void;
+    onSetAnswers: Dispatch<SetStateAction<UserAnswers>>;
+    onSound: (effect: SoundEffect) => void;
+    onAddCustomTag: (fieldKey: string, newTag: string) => void;
+    onRemoveCustomTag: (fieldKey: string, tag: string, defaultTags: string[]) => void;
+  }) {
+   // 获取各字段的默认标签
+   const layoutShapeLabels = layoutShapeOptions.map((opt) => opt.label);
+   const edgeStyleLabels = edgeStyleOptions.map((opt) => opt.label);
+   const decorationLabels = decorationOptions.map((opt) => opt.label);
   return (
     <section className="visual-flavor-panel modal-panel">
       <div className="visual-flavor-head">
@@ -1225,84 +1748,49 @@ function VisualFlavorPanel({
         ))}
       </FlavorGroup>
 
-      <FlavorGroup title="氛围（多选）">
-        {vibeOptions.map((opt) => (
-          <button
-            key={opt}
-            type="button"
-            className={classNames("chip", answers.vibes?.includes(opt) && "is-on")}
-            onClick={() => {
-              onSound("tap");
-              onToggleAnswerList("vibes", opt);
-            }}
-          >
-            {opt}
-          </button>
-        ))}
-      </FlavorGroup>
+      <EditableTagGroup
+        title="氛围（多选）"
+        defaultTags={vibeOptions}
+        customTags={answers.customTags?.vibes}
+        selectedTags={answers.vibes}
+        onAddTag={(newTag) => onAddCustomTag("vibes", newTag)}
+        onRemoveTag={(tag) => onRemoveCustomTag("vibes", tag, vibeOptions)}
+        onToggleTag={(tag) => onToggleAnswerList("vibes", tag)}
+        onSound={onSound}
+      />
 
-      <FlavorGroup title="排版形状（多选 · 仅控制照片轮廓）">
-        {layoutShapeOptions.map((opt) => (
-          <button
-            key={opt.id}
-            type="button"
-            className={classNames("chip chip-with-hint", answers.layoutShapes?.includes(opt.label) && "is-on")}
-            title={opt.hint}
-            onClick={() => {
-              onSound("tap");
-              onToggleAnswerList("layoutShapes", opt.label);
-            }}
-          >
-            <b>{opt.label}</b>
-            <em>{opt.hint}</em>
-          </button>
-        ))}
-      </FlavorGroup>
+      <EditableTagGroup
+        title="排版形状（多选 · 仅控制照片轮廓）"
+        defaultTags={layoutShapeLabels}
+        customTags={answers.customTags?.layoutShapes}
+        selectedTags={answers.layoutShapes}
+        onAddTag={(newTag) => onAddCustomTag("layoutShapes", newTag)}
+        onRemoveTag={(tag) => onRemoveCustomTag("layoutShapes", tag, layoutShapeLabels)}
+        onToggleTag={(tag) => onToggleAnswerList("layoutShapes", tag)}
+        onSound={onSound}
+      />
 
-      <FlavorGroup title="照片边缘风格（多选 · 与形状正交；带 🔒 的边缘自带固定形状会覆盖上方选择）">
-        {edgeStyleOptions.map((opt) => (
-          <button
-            key={opt.id}
-            type="button"
-            className={classNames(
-              "chip chip-with-hint",
-              opt.isFixedShape && "chip-locked",
-              answers.edgeStyles?.includes(opt.label) && "is-on",
-            )}
-            title={
-              opt.isFixedShape
-                ? `${opt.hint} · 该边缘自带固定形状，选中后会覆盖「排版形状」`
-                : opt.hint
-            }
-            onClick={() => {
-              onSound("tap");
-              onToggleAnswerList("edgeStyles", opt.label);
-            }}
-          >
-            <b>
-              {opt.isFixedShape && <span className="chip-lock">🔒</span>}
-              {opt.label}
-            </b>
-            <em>{opt.hint}</em>
-          </button>
-        ))}
-      </FlavorGroup>
+      <EditableTagGroup
+        title="照片边缘风格（多选 · 与形状正交；带 🔒 的边缘自带固定形状会覆盖上方选择）"
+        defaultTags={edgeStyleLabels}
+        customTags={answers.customTags?.edgeStyles}
+        selectedTags={answers.edgeStyles}
+        onAddTag={(newTag) => onAddCustomTag("edgeStyles", newTag)}
+        onRemoveTag={(tag) => onRemoveCustomTag("edgeStyles", tag, edgeStyleLabels)}
+        onToggleTag={(tag) => onToggleAnswerList("edgeStyles", tag)}
+        onSound={onSound}
+      />
 
-      <FlavorGroup title="装饰元素（多选）">
-        {decorationOptions.map((opt) => (
-          <button
-            key={opt.id}
-            type="button"
-            className={classNames("chip", answers.decorations?.includes(opt.label) && "is-on")}
-            onClick={() => {
-              onSound("tap");
-              onToggleAnswerList("decorations", opt.label);
-            }}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </FlavorGroup>
+      <EditableTagGroup
+        title="装饰元素（多选）"
+        defaultTags={decorationLabels}
+        customTags={answers.customTags?.decorations}
+        selectedTags={answers.decorations}
+        onAddTag={(newTag) => onAddCustomTag("decorations", newTag)}
+        onRemoveTag={(tag) => onRemoveCustomTag("decorations", tag, decorationLabels)}
+        onToggleTag={(tag) => onToggleAnswerList("decorations", tag)}
+        onSound={onSound}
+      />
 
       <FlavorGroup title="底图纸张（单选）">
         {paperOptions.map((opt) => (
@@ -1318,6 +1806,41 @@ function VisualFlavorPanel({
           >
             <b>{opt.label}</b>
             <em>{opt.short}</em>
+          </button>
+        ))}
+      </FlavorGroup>
+
+      <FlavorGroup title="画面主色调（单选 · 可不选）">
+        {mainColorOptions.map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            className={classNames("chip chip-color", answers.mainColor === opt.label && "is-on")}
+            title={opt.label}
+            onClick={() => {
+              onSound("tap");
+              onSetAnswers((current) => ({
+                ...current,
+                mainColor: current.mainColor === opt.label ? undefined : opt.label,
+              }));
+            }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5em",
+            }}
+          >
+            <span
+              style={{
+                width: "1.2em",
+                height: "1.2em",
+                borderRadius: "50%",
+                backgroundColor: opt.color,
+                border: "2px solid #ddd",
+                flexShrink: 0,
+              }}
+            />
+            <span>{opt.label}</span>
           </button>
         ))}
       </FlavorGroup>
@@ -1610,4 +2133,406 @@ function DrawingOverlay({
       </div>
     </div>
   );
+}
+
+function PhotoManagerModal({
+ photos,
+ isProcessing,
+ onClose,
+ onAddPhotos,
+ onDeletePhoto,
+ onSound,
+}: {
+ photos: PhotoAsset[];
+ isProcessing: boolean;
+ onClose: () => void;
+ onAddPhotos: (files: FileList | null) => void;
+ onDeletePhoto: (index: number) => void;
+ onSound: (effect: SoundEffect) => void;
+}) {
+ return (
+   <div className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="photo-manager-title">
+     <button className="modal-backdrop" type="button" aria-label="关闭增删画面" onClick={onClose} />
+     <section className="info-modal">
+       <div className="modal-handle" />
+       <div className="speech-bubble">整理一下画桌上的画面</div>
+       <header className="modal-header modal-header-slim">
+         <div className="modal-mascot" aria-hidden="true">
+           <span />
+         </div>
+         <button
+           className="icon-button modal-close-floating"
+           type="button"
+           aria-label="关闭"
+           onClick={onClose}
+         >
+           <CircleX size={22} />
+         </button>
+       </header>
+
+       <div className="modal-scroll">
+         {/* 上传新图片区域 */}
+         <section className="control-band modal-panel">
+           <div className="band-heading">
+             <span>
+               <ImagePlus size={17} />
+               添加新图片
+             </span>
+           </div>
+           <label className={classNames("upload-drop", isProcessing && "is-busy")} onPointerDown={() => onSound("tap")}>
+             <input
+               type="file"
+               accept="image/*"
+               multiple
+               onChange={(event) => {
+                 onAddPhotos(event.currentTarget.files);
+                 event.currentTarget.value = "";
+               }}
+             />
+             <span className="upload-mark">
+               {isProcessing ? <Loader2 className="spin" size={22} /> : <ImagePlus size={22} />}
+             </span>
+             <span className="upload-title">选择或拖拽图片</span>
+             <span className="upload-meta">支持多张图片同时上传</span>
+           </label>
+         </section>
+
+         {/* 已上传图片列表 */}
+         <section className="control-band modal-panel">
+           <div className="band-heading">
+             <span>
+               <Layers3 size={17} />
+               已上传的画面
+             </span>
+             <small>共 <b>{photos.length}</b> 张</small>
+           </div>
+           <div className="photo-manager-list">
+             {photos.map((photo, index) => (
+               <div key={photo.id} className="photo-manager-item">
+                 <div className="photo-manager-preview">
+                   <img src={photo.url} alt={photo.fileName} />
+                   <div className="photo-manager-overlay">
+                     <button
+                       className="photo-delete-btn"
+                       type="button"
+                       onClick={() => {
+                         onSound("tap");
+                         onDeletePhoto(index);
+                       }}
+                       title="删除此图片"
+                       aria-label={`删除 ${photo.fileName}`}
+                     >
+                       <Trash2 size={18} />
+                       <span>删除</span>
+                     </button>
+                   </div>
+                 </div>
+                 <div className="photo-manager-info">
+                   <strong>{photo.fileName}</strong>
+                   <small>{photo.sizeLabel}</small>
+                   {photo.remoteUrl ? (
+                     <small style={{ color: "#4caf50" }}>✓ 已上传到云端</small>
+                   ) : (
+                     <small style={{ color: "#d68a2b" }}>⚠ 云端上传失败</small>
+                   )}
+                 </div>
+               </div>
+             ))}
+             {photos.length === 0 && (
+               <p style={{ textAlign: "center", color: "#999", padding: "2em" }}>还没有上传任何图片</p>
+             )}
+           </div>
+         </section>
+       </div>
+     </section>
+   </div>
+ );
+}
+
+function TemplateDetailModal({
+  template,
+  onClose,
+  onApply,
+  onDelete,
+  onSound,
+}: {
+  template: SavedTemplate;
+  onClose: () => void;
+  onApply: () => void;
+  onDelete: () => void;
+  onSound: (effect: SoundEffect) => void;
+}) {
+ const stylePreset = stylePresets.find((s) => s.id === template.styleId);
+ const templatePreset = templatePresets.find((t) => t.id === template.templateId);
+
+ return (
+   <div className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="template-detail-title">
+     <button className="modal-backdrop" type="button" aria-label="关闭模板详情" onClick={onClose} />
+     <section className="info-modal">
+       <div className="modal-handle" />
+       <div className="speech-bubble">模板详情</div>
+       <header className="modal-header modal-header-slim">
+         <div className="modal-mascot" aria-hidden="true">
+           <span />
+         </div>
+         <button
+           className="icon-button modal-close-floating"
+           type="button"
+           aria-label="关闭"
+           onClick={onClose}
+         >
+           <CircleX size={22} />
+         </button>
+       </header>
+
+       <div className="modal-scroll">
+         {/* 模板封面 */}
+         {template.coverImageUrl && (
+           <section className="control-band modal-panel">
+             <div className="band-heading">
+               <span>模板封面</span>
+             </div>
+             <figure style={{ margin: 0, borderRadius: "0.5em", overflow: "hidden" }}>
+               <img
+                 src={template.coverImageUrl}
+                 alt={template.name}
+                 style={{
+                   width: "100%",
+                   height: "auto",
+                   display: "block",
+                 }}
+               />
+             </figure>
+           </section>
+         )}
+
+         {/* 基本信息 */}
+         <section className="control-band modal-panel">
+           <div className="band-heading">
+             <span>基本信息</span>
+           </div>
+           <div style={{ display: "grid", gap: "1em" }}>
+             <div>
+               <label style={{ display: "block", fontSize: "0.85em", color: "#666", marginBottom: "0.25em" }}>
+                 模板名称
+               </label>
+               <div style={{ fontSize: "1em", fontWeight: "bold" }}>{template.name}</div>
+             </div>
+             <div>
+               <label style={{ display: "block", fontSize: "0.85em", color: "#666", marginBottom: "0.25em" }}>
+                 创建时间
+               </label>
+               <div style={{ fontSize: "1em" }}>
+                 {new Date(template.createdAt).toLocaleDateString("zh-CN", {
+                   year: "numeric",
+                   month: "long",
+                   day: "numeric",
+                   hour: "2-digit",
+                   minute: "2-digit",
+                 })}
+               </div>
+             </div>
+           </div>
+         </section>
+
+         {/* 风格和模板 */}
+         <section className="control-band modal-panel">
+           <div className="band-heading">
+             <span>配置信息</span>
+           </div>
+           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1em" }}>
+             <div>
+               <label style={{ display: "block", fontSize: "0.85em", color: "#666", marginBottom: "0.25em" }}>
+                 风格
+               </label>
+               <div style={{ fontSize: "1em", fontWeight: "bold" }}>
+                 {stylePreset?.name || template.styleId}
+               </div>
+             </div>
+             <div>
+               <label style={{ display: "block", fontSize: "0.85em", color: "#666", marginBottom: "0.25em" }}>
+                 模板
+               </label>
+               <div style={{ fontSize: "1em", fontWeight: "bold" }}>
+                 {templatePreset?.name || template.templateId}
+               </div>
+             </div>
+           </div>
+         </section>
+
+         {/* 场景和情绪 */}
+         <section className="control-band modal-panel">
+           <div className="band-heading">
+             <span>内容配置</span>
+           </div>
+           <div style={{ display: "grid", gap: "1em" }}>
+             <div>
+               <label style={{ display: "block", fontSize: "0.85em", color: "#666", marginBottom: "0.25em" }}>
+                 场景
+               </label>
+               <div style={{ fontSize: "1em" }}>{template.answers.scene}</div>
+             </div>
+             <div>
+               <label style={{ display: "block", fontSize: "0.85em", color: "#666", marginBottom: "0.25em" }}>
+                 情绪
+               </label>
+               <div style={{ fontSize: "1em" }}>
+                 {template.answers.mood.join("、") || "未设置"}
+               </div>
+             </div>
+             <div>
+               <label style={{ display: "block", fontSize: "0.85em", color: "#666", marginBottom: "0.25em" }}>
+                 叙述方式
+               </label>
+               <div style={{ fontSize: "1em" }}>{template.answers.narrator}</div>
+             </div>
+             {template.answers.titleSeed && (
+               <div>
+                 <label style={{ display: "block", fontSize: "0.85em", color: "#666", marginBottom: "0.25em" }}>
+                   标题种子
+                 </label>
+                 <div style={{ fontSize: "1em" }}>{template.answers.titleSeed}</div>
+               </div>
+             )}
+           </div>
+         </section>
+
+         {/* 视觉风味 */}
+         {(template.answers.vibes?.length ||
+           template.answers.layoutShapes?.length ||
+           template.answers.edgeStyles?.length ||
+           template.answers.decorations?.length) && (
+           <section className="control-band modal-panel">
+             <div className="band-heading">
+               <span>视觉风味</span>
+             </div>
+             <div style={{ display: "grid", gap: "1em" }}>
+               {template.answers.vibes?.length > 0 && (
+                 <div>
+                   <label style={{ display: "block", fontSize: "0.85em", color: "#666", marginBottom: "0.25em" }}>
+                     氛围标签
+                   </label>
+                   <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5em" }}>
+                     {template.answers.vibes.map((vibe) => (
+                       <span
+                         key={vibe}
+                         style={{
+                           padding: "0.25em 0.75em",
+                           backgroundColor: "#e8f4f8",
+                           borderRadius: "1em",
+                           fontSize: "0.85em",
+                         }}
+                       >
+                         {vibe}
+                       </span>
+                     ))}
+                   </div>
+                 </div>
+               )}
+               {template.answers.layoutShapes?.length > 0 && (
+                 <div>
+                   <label style={{ display: "block", fontSize: "0.85em", color: "#666", marginBottom: "0.25em" }}>
+                     排版形状
+                   </label>
+                   <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5em" }}>
+                     {template.answers.layoutShapes.map((shape) => (
+                       <span
+                         key={shape}
+                         style={{
+                           padding: "0.25em 0.75em",
+                           backgroundColor: "#f0e8f8",
+                           borderRadius: "1em",
+                           fontSize: "0.85em",
+                         }}
+                       >
+                         {shape}
+                       </span>
+                     ))}
+                   </div>
+                 </div>
+               )}
+               {template.answers.edgeStyles?.length > 0 && (
+                 <div>
+                   <label style={{ display: "block", fontSize: "0.85em", color: "#666", marginBottom: "0.25em" }}>
+                     边缘风格
+                   </label>
+                   <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5em" }}>
+                     {template.answers.edgeStyles.map((style) => (
+                       <span
+                         key={style}
+                         style={{
+                           padding: "0.25em 0.75em",
+                           backgroundColor: "#f8e8e8",
+                           borderRadius: "1em",
+                           fontSize: "0.85em",
+                         }}
+                       >
+                         {style}
+                       </span>
+                     ))}
+                   </div>
+                 </div>
+               )}
+               {template.answers.decorations?.length > 0 && (
+                 <div>
+                   <label style={{ display: "block", fontSize: "0.85em", color: "#666", marginBottom: "0.25em" }}>
+                     装饰元素
+                   </label>
+                   <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5em" }}>
+                     {template.answers.decorations.map((decoration) => (
+                       <span
+                         key={decoration}
+                         style={{
+                           padding: "0.25em 0.75em",
+                           backgroundColor: "#f8f0e8",
+                           borderRadius: "1em",
+                           fontSize: "0.85em",
+                         }}
+                       >
+                         {decoration}
+                       </span>
+                     ))}
+                   </div>
+                 </div>
+               )}
+             </div>
+           </section>
+         )}
+       </div>
+
+       <footer className="modal-footer">
+         <button className="secondary-action" type="button" onClick={onClose}>
+           返回
+         </button>
+         <button
+           className="primary-action"
+           type="button"
+           onClick={() => {
+             onSound("tap");
+             onApply();
+           }}
+           style={{ flex: 1 }}
+         >
+           <Brush size={19} />
+           <span>使用此模板</span>
+         </button>
+         <button
+           className="secondary-action"
+           type="button"
+           onClick={() => {
+             if (window.confirm(`确定要删除模板 "${template.name}" 吗？`)) {
+               onSound("tap");
+               onDelete();
+             }
+           }}
+           title="删除此模板"
+           style={{ color: "#d32f2f" }}
+         >
+           <Trash2 size={19} />
+           <span>删除</span>
+         </button>
+       </footer>
+     </section>
+   </div>
+ );
 }

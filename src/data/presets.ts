@@ -240,6 +240,20 @@ export const paletteOptions: Array<{ id: string; label: string; short: string }>
   { id: "high-contrast", label: "高反差强对比", short: "黑白 / 街拍 / 强烈" },
 ];
 
+/** 画面主色调（单选）。仅用于 UI 展示，不加入 prompt。常见手帐色彩。 */
+export const mainColorOptions: Array<{ id: string; label: string; color: string }> = [
+  { id: "cherry-pink", label: "樱花粉", color: "#FFB6D9" },
+  { id: "sky-blue", label: "天空蓝", color: "#87CEEB" },
+  { id: "mint-green", label: "薄荷绿", color: "#98FF98" },
+  { id: "lavender", label: "薰衣草紫", color: "#E6B3FF" },
+  { id: "peach", label: "蜜桃橙", color: "#FFCC99" },
+  { id: "cream", label: "奶油黄", color: "#FFFACD" },
+  { id: "coral", label: "珊瑚红", color: "#FF7F7F" },
+  { id: "sage-green", label: "鼠尾草绿", color: "#9DC183" },
+  { id: "dusty-rose", label: "尘粉玫瑰", color: "#D8A8A8" },
+  { id: "ocean-teal", label: "海洋青", color: "#5F9EA0" },
+];
+
 /** 氛围标签（多选）。对应 prompt 中的「情绪 / 氛围」段。 */
 export const vibeOptions: string[] = [
   "治愈",
