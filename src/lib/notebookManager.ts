@@ -18,7 +18,9 @@ const PAGES_COLLECTION = "journals_pages";
  * CloudBase 的成功状态可能是：
  * - code: "0" (字符串)
  * - code: 0 (数字)
- * - 没有 code 字段但有 data (某些操作)
+ * - 没有 code 字段但有 data (某些查询操作)
+ * - add/update 操作返回 id（说明成功插入/更新）
+ * - 有操作计数字段 insertedCount/modifiedCount/deletedCount > 0
  * 失败状态通常有 error 字段或 code 不为 0
  */
 function isSuccess(result: any): boolean {
@@ -28,6 +30,18 @@ function isSuccess(result: any): boolean {
   if (result?.code === "0" || result?.code === 0) return true;
   // 如果有 data 且没有 error，也认为是成功（某些查询操作）
   if (result?.data !== undefined && !result?.error) return true;
+  // add() 操作成功时应该返回 id（新插入记录的 ID）
+  if (result?.id) return true;
+  // 通过检查操作计数字段来判断 update/delete 操作是否成功
+  if (result?.insertedCount !== undefined) {
+    return result.insertedCount > 0;
+  }
+  if (result?.modifiedCount !== undefined) {
+    return result.modifiedCount > 0;
+  }
+  if (result?.deletedCount !== undefined) {
+    return result.deletedCount > 0;
+  }
   // 默认认为失败
   return false;
 }
@@ -78,24 +92,59 @@ export async function getAllNotebooks(): Promise<JournalNotebook[]> {
     if (!userId) throw new Error("未能获取用户 ID");
 
     const db = getDb();
-    const result = await db
-      .collection(NOTEBOOKS_COLLECTION)
-      .where({ userId })
-      .orderBy("createdAt", "desc")
-      .get();
+    
+    // 调试日志：打印用户 ID
+    console.log("[getAllNotebooks] 当前用户 ID:", userId);
+    
+    // 注意：某些 CloudBase 版本在使用 where + orderBy 时可能有问题
+    // 为了兼容性，先尝试带 orderBy，如果失败则回退到不带 orderBy
+    let result: any;
+    try {
+      result = await db
+        .collection(NOTEBOOKS_COLLECTION)
+        .where({ userId })
+        .orderBy("createdAt", "desc")
+        .get();
+    } catch (orderByError) {
+      console.warn("[getAllNotebooks] orderBy 查询失败，尝试不带 orderBy:", orderByError);
+      // 回退方案：不使用 orderBy，在客户端排序
+      result = await db
+        .collection(NOTEBOOKS_COLLECTION)
+        .where({ userId })
+        .get();
+      
+      // 客户端排序
+      if (Array.isArray(result?.data)) {
+        result.data.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+      }
+    }
+
+    // 详细的调试日志
+    console.log("[getAllNotebooks] 原始响应:", result);
+    console.log("[getAllNotebooks] 响应 code:", result?.code);
+    console.log("[getAllNotebooks] 响应 error:", (result as any)?.error);
+    console.log("[getAllNotebooks] 响应 data 类型:", typeof result?.data);
+    console.log("[getAllNotebooks] 响应 data 内容:", result?.data);
 
     if (!isSuccess(result)) {
-      const errorMsg = result.message || JSON.stringify(result);
-      console.error("CloudBase 查询错误详情:", result);
+      const errorMsg = (result as any)?.error?.message || (result as any)?.message || (result as any)?.error || JSON.stringify(result);
+      console.error("[getAllNotebooks] CloudBase 查询错误详情:", result);
       throw new Error(`获取手帐本列表失败: ${errorMsg}`);
     }
 
     // 确保返回数组（即使 data 为 undefined）
     const notebooks = Array.isArray(result.data) ? result.data : [];
-    console.log("成功获取手帐本:", notebooks.length);
+    console.log("[getAllNotebooks] 成功获取手帐本数量:", notebooks.length);
+    
+    // 验证返回的数据结构
+    if (notebooks.length > 0) {
+      console.log("[getAllNotebooks] 第一个手帐本:", notebooks[0]);
+    }
+    
     return notebooks;
   } catch (error) {
-    console.error("getAllNotebooks 详细错误:", error);
+    console.error("[getAllNotebooks] 详细错误:", error);
+    
     // 如果是集合不存在的错误，提供更友好的提示
     if (error instanceof Error && error.message.includes("not exist")) {
       throw new Error("还没有创建手帐本集合，请先在 CloudBase 创建 journals_notebooks 集合。参考: CLOUDBASE_QUICK_SETUP.md");
@@ -207,12 +256,29 @@ export async function addPageToNotebook(
 
   // 获取当前最大的 order 值
   const db = getDb();
-  const existingPages = await db
-    .collection(PAGES_COLLECTION)
-    .where({ notebookId, userId })
-    .orderBy("order", "desc")
-    .limit(1)
-    .get();
+  
+  let existingPages: any;
+  try {
+    existingPages = await db
+      .collection(PAGES_COLLECTION)
+      .where({ notebookId, userId })
+      .orderBy("order", "desc")
+      .limit(1)
+      .get();
+  } catch (orderByError) {
+    console.warn("[addPageToNotebook] orderBy 查询失败，尝试不带 orderBy:", orderByError);
+    // 回退方案：不使用 orderBy，改用 limit + 客户端排序
+    existingPages = await db
+      .collection(PAGES_COLLECTION)
+      .where({ notebookId, userId })
+      .get();
+    
+    // 客户端排序并取最大值
+    if (Array.isArray(existingPages?.data) && existingPages.data.length > 0) {
+      existingPages.data.sort((a: any, b: any) => (b.order || 0) - (a.order || 0));
+      existingPages.data = [existingPages.data[0]]; // 只保留第一个
+    }
+  }
 
   const maxOrder = existingPages.data?.[0]?.order ?? -1;
   const newOrder = maxOrder + 1;
@@ -233,7 +299,10 @@ export async function addPageToNotebook(
   const result = await db.collection(PAGES_COLLECTION).add(page);
 
   if (!isSuccess(result)) {
-    throw new Error(`添加页面失败: ${result.message || JSON.stringify(result)}`);
+    // 输出详细的错误信息用于调试
+    console.error("CloudBase add() 失败，返回结果:", result);
+    const errorMsg = (result as any)?.message || JSON.stringify(result);
+    throw new Error(`添加页面失败: ${errorMsg}`);
   }
 
   // 更新手帐本的 pageCount
@@ -251,14 +320,31 @@ export async function getPagesByNotebook(notebookId: string): Promise<JournalPag
   if (!userId) throw new Error("未能获取用户 ID");
 
   const db = getDb();
-  const result = await db
-    .collection(PAGES_COLLECTION)
-    .where({ notebookId, userId })
-    .orderBy("order", "asc")
-    .get();
+  
+  // 为了兼容性，先尝试带 orderBy，如果失败则回退到不带 orderBy
+  let result: any;
+  try {
+    result = await db
+      .collection(PAGES_COLLECTION)
+      .where({ notebookId, userId })
+      .orderBy("order", "asc")
+      .get();
+  } catch (orderByError) {
+    console.warn("[getPagesByNotebook] orderBy 查询失败，尝试不带 orderBy:", orderByError);
+    // 回退方案：不使用 orderBy，在客户端排序
+    result = await db
+      .collection(PAGES_COLLECTION)
+      .where({ notebookId, userId })
+      .get();
+    
+    // 客户端排序
+    if (Array.isArray(result?.data)) {
+      result.data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+    }
+  }
 
   if (!isSuccess(result)) {
-    throw new Error(`获取页面列表失败: ${result.message || JSON.stringify(result)}`);
+    throw new Error(`获取页面列表失败: ${(result as any)?.message || JSON.stringify(result)}`);
   }
 
   return Array.isArray(result.data) ? result.data : [];
