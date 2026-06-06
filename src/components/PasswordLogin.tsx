@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LogIn, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Mail, Loader2, AlertCircle, Eye, EyeOff, Lock, LogIn } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface PasswordLoginProps {
@@ -162,6 +162,10 @@ export function PasswordLogin({ onSignUpClick, onLoginSuccess }: PasswordLoginPr
              fontWeight: 900,
              fontSize: '14px',
              cursor: 'pointer',
+             display: 'flex',
+             alignItems: 'center',
+             justifyContent: 'center',
+             gap: '6px',
              transition: 'all 0.2s ease',
            }}
            onMouseEnter={(e) => {
@@ -175,7 +179,8 @@ export function PasswordLogin({ onSignUpClick, onLoginSuccess }: PasswordLoginPr
              }
            }}
          >
-           密码登录
+           <Lock size={16} />
+           <span>密码登录</span>
          </button>
          <button
            onClick={() => {
@@ -192,6 +197,10 @@ export function PasswordLogin({ onSignUpClick, onLoginSuccess }: PasswordLoginPr
              fontWeight: 900,
              fontSize: '14px',
              cursor: 'pointer',
+             display: 'flex',
+             alignItems: 'center',
+             justifyContent: 'center',
+             gap: '6px',
              transition: 'all 0.2s ease',
            }}
            onMouseEnter={(e) => {
@@ -205,7 +214,8 @@ export function PasswordLogin({ onSignUpClick, onLoginSuccess }: PasswordLoginPr
              }
            }}
          >
-           验证码登录
+           <Mail size={16} />
+           <span>验证码</span>
          </button>
        </div>
 

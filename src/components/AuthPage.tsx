@@ -55,84 +55,84 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
            </h1>
          </div>
 
-          {/* 标签切换 - 使用全局 segmented 风格 */}
-          <div className="segmented" style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-            gap: '10px',
-            marginBottom: '24px',
-            marginLeft: '0',
-            marginRight: '0',
-          }}>
-            <button
-              onClick={() => setMode('login')}
-              className={mode === 'login' ? 'is-active' : ''}
-              style={{
-                minHeight: '46px',
-                padding: '10px 16px',
-                border: mode === 'login' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
-                borderRadius: '16px',
-                background: mode === 'login' ? 'var(--ink)' : '#fffaf0',
-                color: mode === 'login' ? '#fff7eb' : 'var(--ink)',
-                fontWeight: 900,
-                fontSize: '16px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                transition: 'all 0.2s ease',
-                boxShadow: mode === 'login' ? '3px 4px 0 rgba(38, 29, 26, 0.15)' : 'none',
-              }}
-              onMouseEnter={(e) => {
-                if (mode !== 'login') {
-                  e.currentTarget.style.background = '#fff0e0';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (mode !== 'login') {
-                  e.currentTarget.style.background = '#fffaf0';
-                }
-              }}
-            >
-              <LogIn size={18} />
-              <span>登录</span>
-            </button>
-            <button
-              onClick={() => setMode('signup')}
-              className={mode === 'signup' ? 'is-active' : ''}
-              style={{
-                minHeight: '46px',
-                padding: '10px 16px',
-                border: mode === 'signup' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
-                borderRadius: '16px',
-                background: mode === 'signup' ? 'var(--ink)' : '#fffaf0',
-                color: mode === 'signup' ? '#fff7eb' : 'var(--ink)',
-                fontWeight: 900,
-                fontSize: '16px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                transition: 'all 0.2s ease',
-                boxShadow: mode === 'signup' ? '3px 4px 0 rgba(38, 29, 26, 0.15)' : 'none',
-              }}
-              onMouseEnter={(e) => {
-                if (mode !== 'signup') {
-                  e.currentTarget.style.background = '#fff0e0';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (mode !== 'signup') {
-                  e.currentTarget.style.background = '#fffaf0';
-                }
-              }}
-            >
-              <Mail size={18} />
-              <span>注册</span>
-            </button>
-          </div>
+           {/* 标签切换 - 使用全局 segmented 风格 */}
+           <div className="segmented" style={{
+             display: 'grid',
+             gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+             gap: '10px',
+             marginBottom: '24px',
+             marginLeft: '0',
+             marginRight: '0',
+           }}>
+             <button
+               onClick={() => setMode('login')}
+               className={mode === 'login' ? 'is-active' : ''}
+               style={{
+                 minHeight: '44px',
+                 padding: '8px 12px',
+                 border: mode === 'login' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
+                 borderRadius: '14px',
+                 background: mode === 'login' ? 'var(--ink)' : '#fffaf0',
+                 color: mode === 'login' ? '#fff7eb' : 'var(--ink)',
+                 fontWeight: 900,
+                 fontSize: '14px',
+                 cursor: 'pointer',
+                 display: 'flex',
+                 alignItems: 'center',
+                 justifyContent: 'center',
+                 gap: '6px',
+                 transition: 'all 0.2s ease',
+                 boxShadow: mode === 'login' ? '3px 4px 0 rgba(38, 29, 26, 0.15)' : 'none',
+               }}
+               onMouseEnter={(e) => {
+                 if (mode !== 'login') {
+                   e.currentTarget.style.background = '#fff0e0';
+                 }
+               }}
+               onMouseLeave={(e) => {
+                 if (mode !== 'login') {
+                   e.currentTarget.style.background = '#fffaf0';
+                 }
+               }}
+             >
+               <LogIn size={16} />
+               <span>登录</span>
+             </button>
+             <button
+               onClick={() => setMode('signup')}
+               className={mode === 'signup' ? 'is-active' : ''}
+               style={{
+                 minHeight: '44px',
+                 padding: '8px 12px',
+                 border: mode === 'signup' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
+                 borderRadius: '14px',
+                 background: mode === 'signup' ? 'var(--ink)' : '#fffaf0',
+                 color: mode === 'signup' ? '#fff7eb' : 'var(--ink)',
+                 fontWeight: 900,
+                 fontSize: '14px',
+                 cursor: 'pointer',
+                 display: 'flex',
+                 alignItems: 'center',
+                 justifyContent: 'center',
+                 gap: '6px',
+                 transition: 'all 0.2s ease',
+                 boxShadow: mode === 'signup' ? '3px 4px 0 rgba(38, 29, 26, 0.15)' : 'none',
+               }}
+               onMouseEnter={(e) => {
+                 if (mode !== 'signup') {
+                   e.currentTarget.style.background = '#fff0e0';
+                 }
+               }}
+               onMouseLeave={(e) => {
+                 if (mode !== 'signup') {
+                   e.currentTarget.style.background = '#fffaf0';
+                 }
+               }}
+             >
+               <Mail size={16} />
+               <span>注册</span>
+             </button>
+           </div>
 
          {/* 内容区域 */}
           <div>
