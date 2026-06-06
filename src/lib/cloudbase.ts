@@ -29,26 +29,28 @@ export function getApp() {
 // ── 认证（匿名登录）────────────────────────────────────────────────────────────
 
 /**
- * 确保当前用户已登录（匿名）。
- * 多次调用是幂等的：如果已经有登录态则直接返回，否则发起匿名登录。
+ * 确保当前用户已登录。
+ * 多次调用是幂等的：
+ *   - 如果已有任何形式的登录态（密码登录、邮箱登录、匿名登录），直接返回；
+ *   - 如果完全未登录，发起匿名登录作为兜底，让云函数调用可以携带有效 token。
  */
 export async function ensureAnonymousLogin(): Promise<void> {
   const app = getApp();
   const auth = app.auth({ persistence: 'local' });
 
-  // 先检查正式登录 session，避免已登录用户被匿名登录覆盖。
+  // 先检查正式登录 session（密码登录/邮箱登录都会产生 session）
   try {
     const { data } = await auth.getSession();
-    if (data?.session) return;
+    if (data?.session) return; // 已有正式登录态，直接返回，不覆盖
   } catch {
-    // 兼容旧版登录态检查，继续走 getLoginState。
+    // 兼容旧版 SDK，继续走 getLoginState 检查。
   }
 
   // 检查是否已有旧版/匿名登录态
   const loginState = await auth.getLoginState();
   if (loginState) return;
 
-  // 发起匿名登录
+  // 完全无登录态时才发起匿名登录
   const result = await auth.signInAnonymously();
   if (result?.error) {
     throw new Error(`匿名登录失败: ${JSON.stringify(result.error)}`);

@@ -1,9 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
-import cloudbase from '@cloudbase/js-sdk';
-
-const ENV_ID = 'my-travel-journal-d5d06m1a517f14';
-const REGION = 'ap-shanghai';
-const ACCESS_KEY = '';
+import { getApp } from '../lib/cloudbase';
 
 interface User {
   id: string;
@@ -56,18 +52,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-let app: ReturnType<typeof cloudbase.init> | null = null;
-
+// 使用 cloudbase.ts 中的统一单例，避免多实例导致 auth token 错乱
 function getCloudbaseApp() {
-  if (!app) {
-    app = cloudbase.init({
-      env: ENV_ID,
-      region: REGION,
-      accessKey: ACCESS_KEY,
-      auth: { detectSessionInUrl: true },
-    });
-  }
-  return app;
+  return getApp();
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
