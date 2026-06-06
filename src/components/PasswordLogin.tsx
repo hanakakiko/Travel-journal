@@ -136,234 +136,450 @@ export function PasswordLogin({ onSignUpClick, onLoginSuccess }: PasswordLoginPr
     }
   };
 
-  return (
-    <div className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <div className="flex items-center justify-center gap-2 mb-6">
-        <LogIn className="w-6 h-6 text-blue-600" />
-        <h2 className="text-2xl font-bold text-gray-800">账号登录</h2>
-      </div>
+   return (
+     <div style={{
+       width: '100%',
+     }}>
+       {/* 登录方式切换 */}
+       <div className="segmented" style={{
+         display: 'grid',
+         gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+         gap: '10px',
+         marginBottom: '20px',
+       }}>
+         <button
+           onClick={() => {
+             setLoginMode('password');
+             setError(null);
+           }}
+           style={{
+             minHeight: '42px',
+             padding: '8px 12px',
+             border: '2px solid var(--ink)',
+             borderRadius: '14px',
+             background: loginMode === 'password' ? 'var(--ink)' : '#fffcf7',
+             color: loginMode === 'password' ? '#fff7eb' : 'var(--ink)',
+             fontWeight: 900,
+             fontSize: '14px',
+             cursor: 'pointer',
+             transition: 'all 0.2s ease',
+           }}
+         >
+           密码登录
+         </button>
+         <button
+           onClick={() => {
+             setLoginMode('email-otp');
+             setError(null);
+           }}
+           style={{
+             minHeight: '42px',
+             padding: '8px 12px',
+             border: '2px solid var(--ink)',
+             borderRadius: '14px',
+             background: loginMode === 'email-otp' ? 'var(--ink)' : '#fffcf7',
+             color: loginMode === 'email-otp' ? '#fff7eb' : 'var(--ink)',
+             fontWeight: 900,
+             fontSize: '14px',
+             cursor: 'pointer',
+             transition: 'all 0.2s ease',
+           }}
+         >
+           验证码登录
+         </button>
+       </div>
 
-      {/* 登录方式切换 */}
-      <div className="flex gap-2 mb-6 bg-gray-100 rounded-lg p-1">
-        <button
-          onClick={() => {
-            setLoginMode('password');
-            setError(null);
-          }}
-          className={`flex-1 py-2 px-3 rounded text-sm font-medium transition ${
-            loginMode === 'password'
-              ? 'bg-blue-600 text-white'
-              : 'bg-transparent text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          密码登录
-        </button>
-        <button
-          onClick={() => {
-            setLoginMode('email-otp');
-            setError(null);
-          }}
-          className={`flex-1 py-2 px-3 rounded text-sm font-medium transition ${
-            loginMode === 'email-otp'
-              ? 'bg-blue-600 text-white'
-              : 'bg-transparent text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          验证码登录
-        </button>
-      </div>
+       {/* 错误提示 */}
+       {error && (
+         <div style={{
+           marginBottom: '16px',
+           padding: '12px 14px',
+           background: '#fff8b8',
+           border: '2px solid var(--accent-main)',
+           borderRadius: '8px',
+           display: 'flex',
+           alignItems: 'flex-start',
+           gap: '8px',
+         }}>
+           <AlertCircle size={18} style={{ color: 'var(--ink)', flexShrink: 0, marginTop: '2px' }} />
+           <p style={{ fontSize: '14px', color: 'var(--ink)', margin: '0' }}>{error}</p>
+         </div>
+       )}
 
-      {/* 错误提示 */}
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-red-600">{error}</p>
-        </div>
-      )}
+       {/* 密码登录模式 */}
+       {loginMode === 'password' && (
+         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+           <div>
+             <label style={{
+               display: 'block',
+               fontSize: '14px',
+               fontWeight: 900,
+               color: 'var(--ink)',
+               marginBottom: '8px',
+             }}>
+               邮箱 / 用户名
+             </label>
+             <input
+               type="text"
+               value={identifier}
+               onChange={(e) => setIdentifier(e.target.value)}
+               onKeyPress={handleKeyPress}
+               placeholder="请输入邮箱或用户名"
+               style={{
+                 width: '100%',
+                 padding: '10px 12px',
+                 border: '2px solid var(--ink)',
+                 borderRadius: '14px',
+                 background: '#fffcf7',
+                 fontSize: '16px',
+                 fontFamily: 'inherit',
+                 color: 'var(--ink)',
+                 boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+               }}
+               disabled={isLoading}
+               autoComplete="username"
+             />
+             <p style={{
+               fontSize: '12px',
+               color: 'var(--muted)',
+               margin: '6px 0 0 0',
+             }}>
+               邮箱注册的用户请输入邮箱地址
+             </p>
+           </div>
 
-      {/* 密码登录模式 */}
-      {loginMode === 'password' && (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              邮箱 / 用户名
-            </label>
-            <input
-              type="text"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="请输入邮箱或用户名"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-              autoComplete="username"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              邮箱注册的用户请输入邮箱地址
-            </p>
-          </div>
+           <div>
+             <label style={{
+               display: 'block',
+               fontSize: '14px',
+               fontWeight: 900,
+               color: 'var(--ink)',
+               marginBottom: '8px',
+             }}>
+               密码
+             </label>
+             <div style={{ position: 'relative' }}>
+               <input
+                 type={showPassword ? 'text' : 'password'}
+                 value={password}
+                 onChange={(e) => setPassword(e.target.value)}
+                 onKeyPress={handleKeyPress}
+                 placeholder="请输入密码"
+                 style={{
+                   width: '100%',
+                   padding: '10px 40px 10px 12px',
+                   border: '2px solid var(--ink)',
+                   borderRadius: '14px',
+                   background: '#fffcf7',
+                   fontSize: '16px',
+                   fontFamily: 'inherit',
+                   color: 'var(--ink)',
+                   boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+                 }}
+                 disabled={isLoading}
+                 autoComplete="current-password"
+               />
+               <button
+                 type="button"
+                 onClick={() => setShowPassword(!showPassword)}
+                 style={{
+                   position: 'absolute',
+                   right: '10px',
+                   top: '50%',
+                   transform: 'translateY(-50%)',
+                   background: 'transparent',
+                   border: 'none',
+                   cursor: 'pointer',
+                   color: 'var(--muted)',
+                   padding: '0',
+                   display: 'flex',
+                   alignItems: 'center',
+                 }}
+                 tabIndex={-1}
+               >
+                 {showPassword ? (
+                   <EyeOff size={18} />
+                 ) : (
+                   <Eye size={18} />
+                 )}
+               </button>
+             </div>
+           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              密码
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="请输入密码"
-                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={isLoading}
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-800"
-                tabIndex={-1}
-              >
-                {showPassword ? (
-                  <EyeOff className="w-4 h-4" />
-                ) : (
-                  <Eye className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-          </div>
+           <button
+             onClick={handlePasswordLogin}
+             disabled={isLoading || !identifier || !password}
+             style={{
+               width: '100%',
+               minHeight: '52px',
+               padding: '12px 16px',
+               marginTop: '8px',
+               background: isLoading || !identifier || !password ? '#dcd6cc' : 'var(--ink)',
+               color: isLoading || !identifier || !password ? 'rgba(38, 29, 26, 0.54)' : '#fff7eb',
+               border: '2px solid var(--ink)',
+               borderRadius: '999px',
+               fontWeight: 900,
+               fontSize: '16px',
+               cursor: isLoading || !identifier || !password ? 'not-allowed' : 'pointer',
+               display: 'flex',
+               alignItems: 'center',
+               justifyContent: 'center',
+               gap: '8px',
+               transition: 'all 0.2s ease',
+               boxShadow: isLoading || !identifier || !password ? 'none' : '5px 6px 0 rgba(38, 29, 26, 0.1)',
+             }}
+             onMouseDown={(e) => {
+               if (!isLoading && identifier && password) {
+                 e.currentTarget.style.transform = 'translate(3px, 3px)';
+                 e.currentTarget.style.boxShadow = '1px 1px 0 rgba(38, 29, 26, 0.18)';
+               }
+             }}
+             onMouseUp={(e) => {
+               if (!isLoading && identifier && password) {
+                 e.currentTarget.style.transform = 'none';
+                 e.currentTarget.style.boxShadow = '5px 6px 0 rgba(38, 29, 26, 0.1)';
+               }
+             }}
+           >
+             {isLoading ? (
+               <>
+                 <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                 <span>登录中...</span>
+               </>
+             ) : (
+               <>
+                 <LogIn size={18} />
+                 <span>登录</span>
+               </>
+             )}
+           </button>
+         </div>
+       )}
 
-          <button
-            onClick={handlePasswordLogin}
-            disabled={isLoading || !identifier || !password}
-            className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                登录中...
-              </>
-            ) : (
-              <>
-                <LogIn className="w-4 h-4" />
-                登录
-              </>
-            )}
-          </button>
-        </div>
-      )}
+       {/* 邮箱 OTP 登录模式 */}
+       {loginMode === 'email-otp' && (
+         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+           {otpStep === 'email' ? (
+             <>
+               <div>
+                 <label style={{
+                   display: 'block',
+                   fontSize: '14px',
+                   fontWeight: 900,
+                   color: 'var(--ink)',
+                   marginBottom: '8px',
+                 }}>
+                   邮箱地址
+                 </label>
+                 <input
+                   type="email"
+                   value={email}
+                   onChange={(e) => setEmail(e.target.value)}
+                   onKeyPress={handleKeyPress}
+                   placeholder="请输入邮箱地址"
+                   style={{
+                     width: '100%',
+                     padding: '10px 12px',
+                     border: '2px solid var(--ink)',
+                     borderRadius: '14px',
+                     background: '#fffcf7',
+                     fontSize: '16px',
+                     fontFamily: 'inherit',
+                     color: 'var(--ink)',
+                     boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+                   }}
+                   disabled={isLoading}
+                 />
+               </div>
+               <button
+                 onClick={handleSendOtpCode}
+                 disabled={isLoading || !email}
+                 style={{
+                   width: '100%',
+                   minHeight: '48px',
+                   padding: '10px 16px',
+                   marginTop: '8px',
+                   background: isLoading || !email ? '#dcd6cc' : 'var(--ink)',
+                   color: isLoading || !email ? 'rgba(38, 29, 26, 0.54)' : '#fff7eb',
+                   border: '2px solid var(--ink)',
+                   borderRadius: '999px',
+                   fontWeight: 900,
+                   fontSize: '16px',
+                   cursor: isLoading || !email ? 'not-allowed' : 'pointer',
+                   display: 'flex',
+                   alignItems: 'center',
+                   justifyContent: 'center',
+                   gap: '8px',
+                   transition: 'all 0.2s ease',
+                   boxShadow: isLoading || !email ? 'none' : '5px 6px 0 rgba(38, 29, 26, 0.1)',
+                 }}
+               >
+                 {isLoading ? (
+                   <>
+                     <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                     <span>发送中...</span>
+                   </>
+                 ) : (
+                   <span>发送验证码</span>
+                 )}
+               </button>
+             </>
+           ) : (
+             <>
+               <p style={{
+                 fontSize: '14px',
+                 color: 'var(--muted)',
+                 textAlign: 'center',
+                 margin: '0',
+               }}>
+                 验证码已发送到 <span style={{ fontWeight: 900 }}>{email}</span>
+               </p>
+               <div>
+                 <label style={{
+                   display: 'block',
+                   fontSize: '14px',
+                   fontWeight: 900,
+                   color: 'var(--ink)',
+                   marginBottom: '8px',
+                 }}>
+                   验证码 {countdown > 0 && <span style={{ color: 'var(--muted)', fontSize: '12px' }}>({countdown}s)</span>}
+                 </label>
+                 <input
+                   type="text"
+                   value={verificationCode}
+                   onChange={(e) => setVerificationCode(e.target.value.trim())}
+                   onKeyPress={handleKeyPress}
+                   placeholder="请输入验证码"
+                   maxLength={6}
+                   style={{
+                     width: '100%',
+                     padding: '10px 12px',
+                     border: '2px solid var(--ink)',
+                     borderRadius: '14px',
+                     background: '#fffcf7',
+                     fontSize: '16px',
+                     fontFamily: 'inherit',
+                     color: 'var(--ink)',
+                     boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+                     letterSpacing: '4px',
+                   }}
+                   disabled={isLoading}
+                   autoFocus
+                 />
+               </div>
+               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                 <button
+                   onClick={() => {
+                     setOtpStep('email');
+                     setVerificationCode('');
+                     setError(null);
+                   }}
+                   disabled={isLoading}
+                   style={{
+                     minHeight: '44px',
+                     padding: '8px 12px',
+                     background: '#fffcf7',
+                     color: 'var(--ink)',
+                     border: '2px solid var(--ink)',
+                     borderRadius: '999px',
+                     fontWeight: 900,
+                     fontSize: '14px',
+                     cursor: isLoading ? 'not-allowed' : 'pointer',
+                     opacity: isLoading ? 0.6 : 1,
+                     transition: 'all 0.2s ease',
+                   }}
+                 >
+                   返回
+                 </button>
+                 <button
+                   onClick={handleVerifyOtpCode}
+                   disabled={isLoading || !verificationCode}
+                   style={{
+                     minHeight: '44px',
+                     padding: '8px 12px',
+                     background: isLoading || !verificationCode ? '#dcd6cc' : 'var(--ink)',
+                     color: isLoading || !verificationCode ? 'rgba(38, 29, 26, 0.54)' : '#fff7eb',
+                     border: '2px solid var(--ink)',
+                     borderRadius: '999px',
+                     fontWeight: 900,
+                     fontSize: '14px',
+                     cursor: isLoading || !verificationCode ? 'not-allowed' : 'pointer',
+                     display: 'flex',
+                     alignItems: 'center',
+                     justifyContent: 'center',
+                     gap: '6px',
+                     transition: 'all 0.2s ease',
+                     boxShadow: isLoading || !verificationCode ? 'none' : '3px 4px 0 rgba(38, 29, 26, 0.1)',
+                   }}
+                 >
+                   {isLoading ? (
+                     <>
+                       <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                       <span>验证中...</span>
+                     </>
+                   ) : (
+                     <span>登录</span>
+                   )}
+                 </button>
+               </div>
+               <button
+                 onClick={handleSendOtpCode}
+                 disabled={countdown > 0 || isLoading}
+                 style={{
+                   width: '100%',
+                   padding: '8px',
+                   background: 'transparent',
+                   color: countdown > 0 || isLoading ? 'var(--muted)' : 'var(--ink)',
+                   border: 'none',
+                   fontSize: '14px',
+                   fontWeight: 600,
+                   cursor: countdown > 0 || isLoading ? 'not-allowed' : 'pointer',
+                   transition: 'all 0.2s ease',
+                 }}
+               >
+                 {countdown > 0 ? `${countdown}s 后可重新发送` : '重新发送验证码'}
+               </button>
+             </>
+           )}
+         </div>
+       )}
 
-      {/* 邮箱 OTP 登录模式 */}
-      {loginMode === 'email-otp' && (
-        <div className="space-y-4">
-          {otpStep === 'email' ? (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  邮箱地址
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="请输入邮箱地址"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={isLoading}
-                />
-              </div>
-              <button
-                onClick={handleSendOtpCode}
-                disabled={isLoading || !email}
-                className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    发送中...
-                  </>
-                ) : (
-                  '发送验证码'
-                )}
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-gray-600 text-center">
-                验证码已发送到 <span className="font-medium">{email}</span>
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  验证码 {countdown > 0 && <span className="text-gray-500">({countdown}s)</span>}
-                </label>
-                <input
-                  type="text"
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value.trim())}
-                  onKeyPress={handleKeyPress}
-                  placeholder="请输入验证码"
-                  maxLength={6}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={isLoading}
-                  autoFocus
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setOtpStep('email');
-                    setVerificationCode('');
-                    setError(null);
-                  }}
-                  disabled={isLoading}
-                  className="flex-1 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 disabled:opacity-50"
-                >
-                  返回
-                </button>
-                <button
-                  onClick={handleVerifyOtpCode}
-                  disabled={isLoading || !verificationCode}
-                  className="flex-1 py-2 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      验证中...
-                    </>
-                  ) : (
-                    '登录'
-                  )}
-                </button>
-              </div>
-              <button
-                onClick={handleSendOtpCode}
-                disabled={countdown > 0 || isLoading}
-                className="w-full text-blue-600 text-sm hover:text-blue-700 disabled:text-gray-400"
-              >
-                {countdown > 0 ? `${countdown}s 后可重新发送` : '重新发送验证码'}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* 底部链接 */}
-      <div className="mt-6 text-center space-y-2">
-        <p className="text-sm text-gray-600">
-          没有账号？
-          <button
-            onClick={onSignUpClick}
-            className="text-blue-600 hover:text-blue-700 font-medium bg-none border-none cursor-pointer p-0 m-0"
-          >
-            立即注册
-          </button>
-        </p>
-        <p className="text-sm text-gray-600">
-          <a href="/reset-password" className="text-blue-600 hover:text-blue-700">
-            忘记密码？
-          </a>
-        </p>
-      </div>
-    </div>
-  );
-}
+       {/* 底部链接 */}
+       <div style={{
+         marginTop: '24px',
+         textAlign: 'center',
+         display: 'flex',
+         flexDirection: 'column',
+         gap: '12px',
+       }}>
+         <p style={{ fontSize: '14px', color: 'var(--muted)', margin: '0' }}>
+           没有账号？
+           <button
+             onClick={onSignUpClick}
+             style={{
+               marginLeft: '4px',
+               background: 'transparent',
+               border: 'none',
+               color: 'var(--ink)',
+               fontWeight: 900,
+               cursor: 'pointer',
+               padding: '0',
+             }}
+           >
+             立即注册
+           </button>
+         </p>
+         <p style={{ fontSize: '14px', margin: '0' }}>
+           <a href="/reset-password" style={{
+             color: 'var(--ink)',
+             textDecoration: 'none',
+             fontWeight: 600,
+             transition: 'opacity 0.2s',
+           }} onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'} onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}>
+             忘记密码？
+           </a>
+         </p>
+       </div>
+     </div>
+   );
+ }

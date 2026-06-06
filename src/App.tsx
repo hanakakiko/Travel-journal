@@ -46,7 +46,7 @@ import { createSampleFiles } from "./lib/samplePhotos";
 import { playSound, type SoundEffect } from "./lib/soundEffects";
 import { recognizePhotoBatch } from "./lib/visionClient";
 import type { JournalDraft, PhotoAsset, StyleId, TemplateId, UserAnswers, SavedTemplate } from "./types";
-import { getAvailableModels, hasApiKeyForModel, MODEL_CONFIGS, type ModelType } from "./lib/modelConfig";
+import { getAvailableModels, hasApiKeyForModel, hasDirectApiKeyForModel, MODEL_CONFIGS, type ModelType } from "./lib/modelConfig";
 import { getAllTemplates, getAllTemplatesAsync, saveTemplate, deleteTemplate } from "./lib/templateManager";
 import { ensureAnonymousLogin } from "./lib/cloudbase";
 import { initializeUserSettings, getSoundEnabled, saveSoundEnabled } from "./lib/userSettings";
@@ -1342,87 +1342,121 @@ function InfoModal({
                          {new Date(template.createdAt).toLocaleDateString("zh-CN")}
                        </div>
                      </div>
-                     <div style={{ display: "flex", gap: "0.5em", flexShrink: 0 }}>
-                       <button
-                         type="button"
-                         onClick={() => {
-                           onSound("tap");
-                           setSelectedTemplateDetail(template);
-                         }}
-                         style={{
-                           padding: "0.5em 0.75em",
-                           fontSize: "0.85em",
-                           border: "1px solid #ddd",
-                           borderRadius: "0.25em",
-                           backgroundColor: "#fff",
-                           cursor: "pointer",
-                           transition: "all 0.2s ease",
-                         }}
-                         onMouseEnter={(e) => {
-                           e.currentTarget.style.backgroundColor = "#f5f5f5";
-                         }}
-                         onMouseLeave={(e) => {
-                           e.currentTarget.style.backgroundColor = "#fff";
-                         }}
-                       >
-                         查看
-                       </button>
-                       <button
-                         type="button"
-                         onClick={() => {
-                           onSound("tap");
-                           onApplyTemplate(template);
-                           setShowTemplateSelection(false);
-                         }}
-                         style={{
-                           padding: "0.5em 0.75em",
-                           fontSize: "0.85em",
-                           border: "1px solid #4a90e2",
-                           borderRadius: "0.25em",
-                           backgroundColor: "#4a90e2",
-                           color: "#fff",
-                           cursor: "pointer",
-                           transition: "all 0.2s ease",
-                         }}
-                         onMouseEnter={(e) => {
-                           e.currentTarget.style.backgroundColor = "#357abd";
-                         }}
-                         onMouseLeave={(e) => {
-                           e.currentTarget.style.backgroundColor = "#4a90e2";
-                         }}
-                       >
-                         使用
-                       </button>
-                       <button
-                         type="button"
-                         onClick={() => {
-                           if (window.confirm(`确定要删除模板 "${template.name}" 吗？`)) {
-                             onSound("tap");
-                             onDeleteTemplate(template.id);
-                           }
-                         }}
-                         style={{
-                           padding: "0.5em 0.75em",
-                           fontSize: "0.85em",
-                           border: "1px solid #d32f2f",
-                           borderRadius: "0.25em",
-                           backgroundColor: "#fff",
-                           color: "#d32f2f",
-                           cursor: "pointer",
-                           transition: "all 0.2s ease",
-                         }}
-                         onMouseEnter={(e) => {
-                           e.currentTarget.style.backgroundColor = "#ffebee";
-                         }}
-                         onMouseLeave={(e) => {
-                           e.currentTarget.style.backgroundColor = "#fff";
-                         }}
-                         title="删除此模板"
-                       >
-                         <Trash2 size={16} style={{ display: "inline", marginRight: "0.25em" }} />
-                         删除
-                       </button>
-                     </div>
+                      <div style={{ display: "flex", gap: "0.5em", flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSound("tap");
+                            setSelectedTemplateDetail(template);
+                          }}
+                          style={{
+                            padding: "0.4em 0.8em",
+                            fontSize: "0.85em",
+                            fontWeight: 900,
+                            border: "2px solid var(--ink)",
+                            borderRadius: "999px",
+                            backgroundColor: "#fffcf7",
+                            color: "var(--ink)",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                            boxShadow: "2px 3px 0 rgba(38, 29, 26, 0.08)",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = "rgba(23, 18, 15, 0.05)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "#fffcf7";
+                          }}
+                          onMouseDown={(e) => {
+                            e.currentTarget.style.transform = "translate(1px, 2px)";
+                            e.currentTarget.style.boxShadow = "0 1px 0 rgba(38, 29, 26, 0.1)";
+                          }}
+                          onMouseUp={(e) => {
+                            e.currentTarget.style.transform = "none";
+                            e.currentTarget.style.boxShadow = "2px 3px 0 rgba(38, 29, 26, 0.08)";
+                          }}
+                        >
+                          查看
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSound("tap");
+                            onApplyTemplate(template);
+                            setShowTemplateSelection(false);
+                          }}
+                          style={{
+                            padding: "0.4em 0.8em",
+                            fontSize: "0.85em",
+                            fontWeight: 900,
+                            border: "2px solid var(--ink)",
+                            borderRadius: "999px",
+                            backgroundColor: "var(--ink)",
+                            color: "#fff7eb",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                            boxShadow: "2px 3px 0 rgba(38, 29, 26, 0.1)",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = "#1a1612";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "var(--ink)";
+                          }}
+                          onMouseDown={(e) => {
+                            e.currentTarget.style.transform = "translate(1px, 2px)";
+                            e.currentTarget.style.boxShadow = "0 1px 0 rgba(38, 29, 26, 0.18)";
+                          }}
+                          onMouseUp={(e) => {
+                            e.currentTarget.style.transform = "none";
+                            e.currentTarget.style.boxShadow = "2px 3px 0 rgba(38, 29, 26, 0.1)";
+                          }}
+                        >
+                          使用
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`确定要删除模板 "${template.name}" 吗？`)) {
+                              onSound("tap");
+                              onDeleteTemplate(template.id);
+                            }
+                          }}
+                          style={{
+                            padding: "0.4em 0.8em",
+                            fontSize: "0.85em",
+                            fontWeight: 900,
+                            border: "2px solid var(--accent-main)",
+                            borderRadius: "999px",
+                            backgroundColor: "#fff8b8",
+                            color: "var(--ink)",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                            boxShadow: "2px 3px 0 rgba(255, 207, 56, 0.2)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.25em",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = "#ffeb99";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "#fff8b8";
+                          }}
+                          onMouseDown={(e) => {
+                            e.currentTarget.style.transform = "translate(1px, 2px)";
+                            e.currentTarget.style.boxShadow = "0 1px 0 rgba(255, 207, 56, 0.3)";
+                          }}
+                          onMouseUp={(e) => {
+                            e.currentTarget.style.transform = "none";
+                            e.currentTarget.style.boxShadow = "2px 3px 0 rgba(255, 207, 56, 0.2)";
+                          }}
+                          title="删除此模板"
+                        >
+                          <Trash2 size={14} />
+                          <span>删除</span>
+                        </button>
+                      </div>
                    </div>
                  ))}
                </div>
@@ -1485,35 +1519,37 @@ function InfoModal({
                   生成模型
                 </span>
               </div>
-              <div className="segmented">
-                {(Object.keys(MODEL_CONFIGS) as ModelType[])
-                  .filter((id) => id !== "other")
-                  .map((modelId) => {
-                    const config = MODEL_CONFIGS[modelId];
-                    const hasConfig = hasApiKeyForModel(modelId);
-                    return (
-                      <button
-                        key={modelId}
-                        className={classNames(
-                          answers.selectedModel === modelId && "is-active",
-                          !hasConfig && "is-disabled"
-                        )}
-                        type="button"
-                        onClick={() => {
-                          if (hasConfig) {
-                            onSound("tap");
-                            onSetAnswers((current) => ({ ...current, selectedModel: modelId }));
-                          }
-                        }}
-                        disabled={!hasConfig}
-                        title={hasConfig ? config.description : `未配置 ${config.name} 的 API Key`}
-                      >
-                        {config.name}
-                        {!hasConfig && <span className="model-unconfigured-badge">未配置</span>}
-                      </button>
-                    );
-                  })}
-              </div>
+               <div className="segmented">
+                 {(Object.keys(MODEL_CONFIGS) as ModelType[])
+                   .filter((id) => id !== "other")
+                   .map((modelId) => {
+                     const config = MODEL_CONFIGS[modelId];
+                     const hasConfig = hasApiKeyForModel(modelId);
+                     const hasDirectConfig = hasDirectApiKeyForModel(modelId);
+                     const isVApiModel = modelId === "v-api-gpt-image-2" || modelId === "v-api-seedream-4-5";
+                     return (
+                       <button
+                         key={modelId}
+                         className={classNames(
+                           answers.selectedModel === modelId && "is-active",
+                           !hasDirectConfig && isVApiModel && "is-cloud-enabled"
+                         )}
+                         type="button"
+                         onClick={() => {
+                           if (hasConfig) {
+                             onSound("tap");
+                             onSetAnswers((current) => ({ ...current, selectedModel: modelId }));
+                           }
+                         }}
+                         disabled={!hasConfig}
+                         title={config.description}
+                       >
+                         {config.name}
+                         {!hasDirectConfig && isVApiModel && <span className="model-unconfigured-badge">付费额度</span>}
+                       </button>
+                     );
+                   })}
+               </div>
               {getAvailableModels().length === 0 && (
                 <div style={{ padding: "1em", backgroundColor: "#fff3cd", borderRadius: "0.5em", color: "#856404", marginTop: "0.5em" }}>
                   <p style={{ margin: "0 0 0.5em 0", fontWeight: "bold" }}>⚠️ 还没有配置任何生成模型</p>
@@ -2723,38 +2759,101 @@ function TemplateDetailModal({
          )}
        </div>
 
-       <footer className="modal-footer">
-         <button className="secondary-action" type="button" onClick={onClose}>
-           返回
-         </button>
-         <button
-           className="primary-action"
-           type="button"
-           onClick={() => {
-             onSound("tap");
-             onApply();
-           }}
-           style={{ flex: 1 }}
-         >
-           <Brush size={19} />
-           <span>使用此模板</span>
-         </button>
-         <button
-           className="secondary-action"
-           type="button"
-           onClick={() => {
-             if (window.confirm(`确定要删除模板 "${template.name}" 吗？`)) {
-               onSound("tap");
-               onDelete();
-             }
-           }}
-           title="删除此模板"
-           style={{ color: "#d32f2f" }}
-         >
-           <Trash2 size={19} />
-           <span>删除</span>
-         </button>
-       </footer>
+        <footer className="modal-footer">
+          <button type="button" onClick={onClose} style={{
+            minHeight: '48px',
+            padding: '10px 16px',
+            background: '#fffcf7',
+            color: 'var(--ink)',
+            border: '2px solid var(--ink)',
+            borderRadius: '999px',
+            fontWeight: 900,
+            fontSize: '16px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease',
+            boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.08)',
+          }}>
+            返回
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onSound("tap");
+              onApply();
+            }}
+            style={{
+              flex: 1,
+              minHeight: '48px',
+              padding: '10px 16px',
+              background: 'var(--ink)',
+              color: '#fff7eb',
+              border: '2px solid var(--ink)',
+              borderRadius: '999px',
+              fontWeight: 900,
+              fontSize: '16px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease',
+              boxShadow: '5px 6px 0 rgba(38, 29, 26, 0.1)',
+            }}
+            onMouseDown={(e) => {
+              e.currentTarget.style.transform = 'translate(3px, 3px)';
+              e.currentTarget.style.boxShadow = '1px 1px 0 rgba(38, 29, 26, 0.18)';
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = 'none';
+              e.currentTarget.style.boxShadow = '5px 6px 0 rgba(38, 29, 26, 0.1)';
+            }}
+          >
+            <Brush size={19} />
+            <span>使用此模板</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm(`确定要删除模板 "${template.name}" 吗？`)) {
+                onSound("tap");
+                onDelete();
+              }
+            }}
+            title="删除此模板"
+            style={{
+              minHeight: '48px',
+              padding: '10px 16px',
+              background: '#fff8b8',
+              color: 'var(--ink)',
+              border: '2px solid var(--accent-main)',
+              borderRadius: '999px',
+              fontWeight: 900,
+              fontSize: '16px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease',
+              boxShadow: '3px 4px 0 rgba(255, 207, 56, 0.2)',
+            }}
+            onMouseDown={(e) => {
+              e.currentTarget.style.transform = 'translate(2px, 2px)';
+              e.currentTarget.style.boxShadow = '1px 2px 0 rgba(255, 207, 56, 0.3)';
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = 'none';
+              e.currentTarget.style.boxShadow = '3px 4px 0 rgba(255, 207, 56, 0.2)';
+            }}
+          >
+            <Trash2 size={19} />
+            <span>删除</span>
+          </button>
+        </footer>
      </section>
    </div>
  );

@@ -97,138 +97,274 @@ export function UsernameSignUp({ onSignUpSuccess }: UsernameSignUpProps) {
     }
   };
 
-  return (
-    <div className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <div className="flex items-center justify-center gap-2 mb-6">
-        <User className="w-6 h-6 text-indigo-600" />
-        <h2 className="text-2xl font-bold text-gray-800">用户名注册</h2>
-      </div>
+   return (
+     <div style={{ width: '100%' }}>
+       {/* 错误提示 */}
+       {error && (
+         <div style={{
+           marginBottom: '16px',
+           padding: '12px 14px',
+           background: '#fff8b8',
+           border: '2px solid var(--accent-main)',
+           borderRadius: '8px',
+           display: 'flex',
+           alignItems: 'flex-start',
+           gap: '8px',
+         }}>
+           <AlertCircle size={18} style={{ color: 'var(--ink)', flexShrink: 0, marginTop: '2px' }} />
+           <p style={{ fontSize: '14px', color: 'var(--ink)', margin: '0' }}>{error}</p>
+         </div>
+       )}
 
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-red-600">{error}</p>
-        </div>
-      )}
+       {/* 成功提示 */}
+       {success && (
+         <div style={{
+           marginBottom: '16px',
+           padding: '12px 14px',
+           background: '#f0f7f4',
+           border: '2px solid var(--accent-alt)',
+           borderRadius: '8px',
+           display: 'flex',
+           alignItems: 'flex-start',
+           gap: '8px',
+         }}>
+           <CheckCircle size={18} style={{ color: 'var(--accent-alt)', flexShrink: 0, marginTop: '2px' }} />
+           <p style={{ fontSize: '14px', color: 'var(--ink)', margin: '0' }}>{success}</p>
+         </div>
+       )}
 
-      {success && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
-          <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-green-600">{success}</p>
-        </div>
-      )}
+       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+         {/* 用户名 */}
+         <div>
+           <label style={{
+             display: 'block',
+             fontSize: '14px',
+             fontWeight: 900,
+             color: 'var(--ink)',
+             marginBottom: '8px',
+           }}>
+             用户名 <span style={{ color: '#ff4444' }}>*</span>
+           </label>
+           <input
+             type="text"
+             value={username}
+             onChange={(e) => setUsername(e.target.value)}
+             placeholder="3-20 个字符，支持字母、数字和下划线"
+             style={{
+               width: '100%',
+               padding: '10px 12px',
+               border: '2px solid var(--ink)',
+               borderRadius: '14px',
+               background: '#fffcf7',
+               fontSize: '16px',
+               fontFamily: 'inherit',
+               color: 'var(--ink)',
+               boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+             }}
+             disabled={isLoading}
+             maxLength={20}
+           />
+           <p style={{
+             fontSize: '12px',
+             color: 'var(--muted)',
+             margin: '6px 0 0 0',
+           }}>
+             {username.length > 0 ? `${username.length}/20` : ''}
+           </p>
+         </div>
 
-      <div className="space-y-4">
-        {/* 用户名 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            用户名 <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="3-20 个字符，支持字母、数字和下划线"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            disabled={isLoading}
-            maxLength={20}
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            {username.length > 0 ? `${username.length}/20` : ''}
-          </p>
-        </div>
+         {/* 密码 */}
+         <div>
+           <label style={{
+             display: 'block',
+             fontSize: '14px',
+             fontWeight: 900,
+             color: 'var(--ink)',
+             marginBottom: '8px',
+           }}>
+             密码 <span style={{ color: '#ff4444' }}>*</span>
+           </label>
+           <div style={{ position: 'relative' }}>
+             <input
+               type={showPassword ? 'text' : 'password'}
+               value={password}
+               onChange={(e) => setPassword(e.target.value)}
+               placeholder="至少 6 个字符"
+               style={{
+                 width: '100%',
+                 padding: '10px 40px 10px 12px',
+                 border: '2px solid var(--ink)',
+                 borderRadius: '14px',
+                 background: '#fffcf7',
+                 fontSize: '16px',
+                 fontFamily: 'inherit',
+                 color: 'var(--ink)',
+                 boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+               }}
+               disabled={isLoading}
+               maxLength={50}
+             />
+             <button
+               type="button"
+               onClick={() => setShowPassword(!showPassword)}
+               disabled={isLoading}
+               style={{
+                 position: 'absolute',
+                 right: '10px',
+                 top: '50%',
+                 transform: 'translateY(-50%)',
+                 background: 'transparent',
+                 border: 'none',
+                 cursor: isLoading ? 'not-allowed' : 'pointer',
+                 color: 'var(--muted)',
+                 padding: '0',
+                 display: 'flex',
+                 alignItems: 'center',
+                 opacity: isLoading ? 0.5 : 1,
+               }}
+             >
+               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+             </button>
+           </div>
+           <p style={{
+             fontSize: '12px',
+             color: 'var(--muted)',
+             margin: '6px 0 0 0',
+           }}>
+             {password.length > 0 ? `${password.length}/50` : ''}
+           </p>
+         </div>
 
-        {/* 密码 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            密码 <span className="text-red-500">*</span>
-          </label>
-          <div className="relative">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="至少 6 个字符"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent pr-10"
-              disabled={isLoading}
-              maxLength={50}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              disabled={isLoading}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-            >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          <p className="text-xs text-gray-500 mt-1">
-            {password.length > 0 ? `${password.length}/50` : ''}
-          </p>
-        </div>
+         {/* 确认密码 */}
+         <div>
+           <label style={{
+             display: 'block',
+             fontSize: '14px',
+             fontWeight: 900,
+             color: 'var(--ink)',
+             marginBottom: '8px',
+           }}>
+             确认密码 <span style={{ color: '#ff4444' }}>*</span>
+           </label>
+           <div style={{ position: 'relative' }}>
+             <input
+               type={showConfirmPassword ? 'text' : 'password'}
+               value={confirmPassword}
+               onChange={(e) => setConfirmPassword(e.target.value)}
+               placeholder="再次输入密码"
+               style={{
+                 width: '100%',
+                 padding: '10px 40px 10px 12px',
+                 border: '2px solid var(--ink)',
+                 borderRadius: '14px',
+                 background: '#fffcf7',
+                 fontSize: '16px',
+                 fontFamily: 'inherit',
+                 color: 'var(--ink)',
+                 boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+               }}
+               disabled={isLoading}
+               maxLength={50}
+             />
+             <button
+               type="button"
+               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+               disabled={isLoading}
+               style={{
+                 position: 'absolute',
+                 right: '10px',
+                 top: '50%',
+                 transform: 'translateY(-50%)',
+                 background: 'transparent',
+                 border: 'none',
+                 cursor: isLoading ? 'not-allowed' : 'pointer',
+                 color: 'var(--muted)',
+                 padding: '0',
+                 display: 'flex',
+                 alignItems: 'center',
+                 opacity: isLoading ? 0.5 : 1,
+               }}
+             >
+               {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+             </button>
+           </div>
+         </div>
 
-        {/* 确认密码 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            确认密码 <span className="text-red-500">*</span>
-          </label>
-          <div className="relative">
-            <input
-              type={showConfirmPassword ? 'text' : 'password'}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="再次输入密码"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent pr-10"
-              disabled={isLoading}
-              maxLength={50}
-            />
-            <button
-              type="button"
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              disabled={isLoading}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-            >
-              {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
+         {/* 昵称（可选） */}
+         <div>
+           <label style={{
+             display: 'block',
+             fontSize: '14px',
+             fontWeight: 900,
+             color: 'var(--ink)',
+             marginBottom: '8px',
+           }}>
+             昵称（可选）
+           </label>
+           <input
+             type="text"
+             value={nickname}
+             onChange={(e) => setNickname(e.target.value)}
+             placeholder="输入您的昵称"
+             style={{
+               width: '100%',
+               padding: '10px 12px',
+               border: '2px solid var(--ink)',
+               borderRadius: '14px',
+               background: '#fffcf7',
+               fontSize: '16px',
+               fontFamily: 'inherit',
+               color: 'var(--ink)',
+               boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+             }}
+             disabled={isLoading}
+           />
+         </div>
 
-        {/* 昵称（可选） */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            昵称（可选）
-          </label>
-          <input
-            type="text"
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            placeholder="输入您的昵称"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            disabled={isLoading}
-          />
-        </div>
+         {/* 注册按钮 */}
+         <button
+           onClick={handleSignUp}
+           disabled={isLoading || !username || !password || !confirmPassword}
+           style={{
+             width: '100%',
+             minHeight: '48px',
+             padding: '10px 16px',
+             marginTop: '8px',
+             background: isLoading || !username || !password || !confirmPassword ? '#dcd6cc' : 'var(--ink)',
+             color: isLoading || !username || !password || !confirmPassword ? 'rgba(38, 29, 26, 0.54)' : '#fff7eb',
+             border: '2px solid var(--ink)',
+             borderRadius: '999px',
+             fontWeight: 900,
+             fontSize: '16px',
+             cursor: isLoading || !username || !password || !confirmPassword ? 'not-allowed' : 'pointer',
+             display: 'flex',
+             alignItems: 'center',
+             justifyContent: 'center',
+             gap: '8px',
+             transition: 'all 0.2s ease',
+             boxShadow: isLoading || !username || !password || !confirmPassword ? 'none' : '5px 6px 0 rgba(38, 29, 26, 0.1)',
+           }}
+         >
+           {isLoading ? (
+             <>
+               <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+               <span>注册中...</span>
+             </>
+           ) : (
+             <span>立即注册</span>
+           )}
+         </button>
 
-        {/* 注册按钮 */}
-        <button
-          onClick={handleSignUp}
-          disabled={isLoading || !username || !password || !confirmPassword}
-          className="w-full py-2 px-4 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              注册中...
-            </>
-          ) : (
-            '立即注册'
-          )}
-        </button>
-
-        {/* 条款提示 */}
-        <p className="text-xs text-gray-600 text-center">
-          注册即表示同意我们的服务条款和隐私政策
-        </p>
-      </div>
-    </div>
-  );
-}
+         {/* 条款提示 */}
+         <p style={{
+           fontSize: '12px',
+           color: 'var(--muted)',
+           textAlign: 'center',
+           margin: '0',
+         }}>
+           注册即表示同意我们的服务条款和隐私政策
+         </p>
+       </div>
+     </div>
+   );
+ }

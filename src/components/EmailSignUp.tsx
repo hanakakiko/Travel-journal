@@ -87,138 +87,268 @@ export function EmailSignUp({ onSignUpSuccess }: EmailSignUpProps) {
     }
   };
 
-  return (
-    <div className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <div className="flex items-center justify-center gap-2 mb-6">
-        <Mail className="w-6 h-6 text-blue-600" />
-        <h2 className="text-2xl font-bold text-gray-800">邮箱注册</h2>
-      </div>
+   return (
+     <div style={{ width: '100%' }}>
+       {/* 错误提示 */}
+       {error && (
+         <div style={{
+           marginBottom: '16px',
+           padding: '12px 14px',
+           background: '#fff8b8',
+           border: '2px solid var(--accent-main)',
+           borderRadius: '8px',
+           display: 'flex',
+           alignItems: 'flex-start',
+           gap: '8px',
+         }}>
+           <AlertCircle size={18} style={{ color: 'var(--ink)', flexShrink: 0, marginTop: '2px' }} />
+           <p style={{ fontSize: '14px', color: 'var(--ink)', margin: '0' }}>{error}</p>
+         </div>
+       )}
 
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-red-600">{error}</p>
-        </div>
-      )}
+       {/* 成功提示 */}
+       {success && (
+         <div style={{
+           marginBottom: '16px',
+           padding: '12px 14px',
+           background: '#f0f7f4',
+           border: '2px solid var(--accent-alt)',
+           borderRadius: '8px',
+           display: 'flex',
+           alignItems: 'flex-start',
+           gap: '8px',
+         }}>
+           <CheckCircle size={18} style={{ color: 'var(--accent-alt)', flexShrink: 0, marginTop: '2px' }} />
+           <p style={{ fontSize: '14px', color: 'var(--ink)', margin: '0' }}>{success}</p>
+         </div>
+       )}
 
-      {success && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
-          <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-green-600">{success}</p>
-        </div>
-      )}
+       {step === 'form' && (
+         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+           <div>
+             <label style={{
+               display: 'block',
+               fontSize: '14px',
+               fontWeight: 900,
+               color: 'var(--ink)',
+               marginBottom: '8px',
+             }}>
+               邮箱地址
+             </label>
+             <input
+               type="email"
+               value={email}
+               onChange={(e) => setEmail(e.target.value)}
+               placeholder="请输入您的邮箱"
+               style={{
+                 width: '100%',
+                 padding: '10px 12px',
+                 border: '2px solid var(--ink)',
+                 borderRadius: '14px',
+                 background: '#fffcf7',
+                 fontSize: '16px',
+                 fontFamily: 'inherit',
+                 color: 'var(--ink)',
+                 boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+               }}
+               disabled={isLoading}
+             />
+           </div>
 
-      {step === 'form' && (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              邮箱地址
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="请输入您的邮箱"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-            />
-          </div>
+           <div>
+             <label style={{
+               display: 'block',
+               fontSize: '14px',
+               fontWeight: 900,
+               color: 'var(--ink)',
+               marginBottom: '8px',
+             }}>
+               昵称（可选）
+             </label>
+             <input
+               type="text"
+               value={nickname}
+               onChange={(e) => setNickname(e.target.value)}
+               placeholder="请输入您的昵称"
+               style={{
+                 width: '100%',
+                 padding: '10px 12px',
+                 border: '2px solid var(--ink)',
+                 borderRadius: '14px',
+                 background: '#fffcf7',
+                 fontSize: '16px',
+                 fontFamily: 'inherit',
+                 color: 'var(--ink)',
+                 boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+               }}
+               disabled={isLoading}
+             />
+           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              昵称（可选）
-            </label>
-            <input
-              type="text"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              placeholder="请输入您的昵称"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-            />
-          </div>
+           <button
+             onClick={handleSendCode}
+             disabled={isLoading || !email}
+             style={{
+               width: '100%',
+               minHeight: '48px',
+               padding: '10px 16px',
+               marginTop: '8px',
+               background: isLoading || !email ? '#dcd6cc' : 'var(--ink)',
+               color: isLoading || !email ? 'rgba(38, 29, 26, 0.54)' : '#fff7eb',
+               border: '2px solid var(--ink)',
+               borderRadius: '999px',
+               fontWeight: 900,
+               fontSize: '16px',
+               cursor: isLoading || !email ? 'not-allowed' : 'pointer',
+               display: 'flex',
+               alignItems: 'center',
+               justifyContent: 'center',
+               gap: '8px',
+               transition: 'all 0.2s ease',
+               boxShadow: isLoading || !email ? 'none' : '5px 6px 0 rgba(38, 29, 26, 0.1)',
+             }}
+           >
+             {isLoading ? (
+               <>
+                 <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                 <span>发送中...</span>
+               </>
+             ) : (
+               <span>发送验证码</span>
+             )}
+           </button>
 
-          <button
-            onClick={handleSendCode}
-            disabled={isLoading || !email}
-            className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                发送中...
-              </>
-            ) : (
-              '发送验证码'
-            )}
-          </button>
+           <p style={{
+             fontSize: '12px',
+             color: 'var(--muted)',
+             textAlign: 'center',
+             margin: '0',
+           }}>
+             注册即表示同意我们的服务条款和隐私政策
+           </p>
+         </div>
+       )}
 
-          <p className="text-xs text-gray-600 text-center">
-            注册即表示同意我们的服务条款和隐私政策
-          </p>
-        </div>
-      )}
+       {step === 'verify' && (
+         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+           <p style={{
+             fontSize: '14px',
+             color: 'var(--muted)',
+             textAlign: 'center',
+             margin: '0',
+           }}>
+             验证码已发送到 <span style={{ fontWeight: 900, color: 'var(--ink)' }}>{email}</span>
+           </p>
 
-      {step === 'verify' && (
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600 text-center">
-            验证码已发送到 <span className="font-medium text-gray-800">{email}</span>
-          </p>
+           <div>
+             <label style={{
+               display: 'block',
+               fontSize: '14px',
+               fontWeight: 900,
+               color: 'var(--ink)',
+               marginBottom: '8px',
+             }}>
+               验证码
+             </label>
+             <input
+               type="text"
+               value={verificationCode}
+               onChange={(e) => setVerificationCode(e.target.value.trim())}
+               placeholder="请输入邮箱验证码"
+               maxLength={6}
+               style={{
+                 width: '100%',
+                 padding: '10px 12px',
+                 border: '2px solid var(--ink)',
+                 borderRadius: '14px',
+                 background: '#fffcf7',
+                 fontSize: '16px',
+                 fontFamily: 'inherit',
+                 color: 'var(--ink)',
+                 boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+                 letterSpacing: '4px',
+               }}
+               disabled={isLoading}
+               autoFocus
+             />
+           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              验证码
-            </label>
-            <input
-              type="text"
-              value={verificationCode}
-              onChange={(e) => setVerificationCode(e.target.value.trim())}
-              placeholder="请输入邮箱验证码"
-              maxLength={6}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-              autoFocus
-            />
-          </div>
+           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+             <button
+               onClick={() => {
+                 setStep('form');
+                 setVerificationCode('');
+                 setError(null);
+                 setSuccess(null);
+               }}
+               disabled={isLoading}
+               style={{
+                 minHeight: '44px',
+                 padding: '8px 12px',
+                 background: '#fffcf7',
+                 color: 'var(--ink)',
+                 border: '2px solid var(--ink)',
+                 borderRadius: '999px',
+                 fontWeight: 900,
+                 fontSize: '14px',
+                 cursor: isLoading ? 'not-allowed' : 'pointer',
+                 opacity: isLoading ? 0.6 : 1,
+                 transition: 'all 0.2s ease',
+               }}
+             >
+               返回修改
+             </button>
+             <button
+               onClick={handleVerify}
+               disabled={isLoading || !verificationCode}
+               style={{
+                 minHeight: '44px',
+                 padding: '8px 12px',
+                 background: isLoading || !verificationCode ? '#dcd6cc' : 'var(--ink)',
+                 color: isLoading || !verificationCode ? 'rgba(38, 29, 26, 0.54)' : '#fff7eb',
+                 border: '2px solid var(--ink)',
+                 borderRadius: '999px',
+                 fontWeight: 900,
+                 fontSize: '14px',
+                 cursor: isLoading || !verificationCode ? 'not-allowed' : 'pointer',
+                 display: 'flex',
+                 alignItems: 'center',
+                 justifyContent: 'center',
+                 gap: '6px',
+                 transition: 'all 0.2s ease',
+                 boxShadow: isLoading || !verificationCode ? 'none' : '3px 4px 0 rgba(38, 29, 26, 0.1)',
+               }}
+             >
+               {isLoading ? (
+                 <>
+                   <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                   <span>验证中...</span>
+                 </>
+               ) : (
+                 <span>完成注册</span>
+               )}
+             </button>
+           </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                setStep('form');
-                setVerificationCode('');
-                setError(null);
-                setSuccess(null);
-              }}
-              disabled={isLoading}
-              className="flex-1 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              返回修改
-            </button>
-            <button
-              onClick={handleVerify}
-              disabled={isLoading || !verificationCode}
-              className="flex-1 py-2 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  验证中...
-                </>
-              ) : (
-                '完成注册'
-              )}
-            </button>
-          </div>
-
-          <button
-            onClick={handleSendCode}
-            disabled={countdown > 0 || isLoading}
-            className="w-full text-blue-600 text-sm hover:text-blue-700 disabled:text-gray-400 disabled:cursor-not-allowed"
-          >
-            {countdown > 0 ? `${countdown}s 后可重新发送` : '重新发送验证码'}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+           <button
+             onClick={handleSendCode}
+             disabled={countdown > 0 || isLoading}
+             style={{
+               width: '100%',
+               padding: '8px',
+               background: 'transparent',
+               color: countdown > 0 || isLoading ? 'var(--muted)' : 'var(--ink)',
+               border: 'none',
+               fontSize: '14px',
+               fontWeight: 600,
+               cursor: countdown > 0 || isLoading ? 'not-allowed' : 'pointer',
+               transition: 'all 0.2s ease',
+             }}
+           >
+             {countdown > 0 ? `${countdown}s 后可重新发送` : '重新发送验证码'}
+           </button>
+         </div>
+       )}
+     </div>
+   );
+ }
