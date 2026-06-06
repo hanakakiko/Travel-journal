@@ -1,7 +1,18 @@
 /**
- * 用户 API 配置管理
- * 允许用户为每个模型输入自己的 API Key 和自定义端点
+ * 用户 API 配置管理（适配层）
+ *
+ * 功能已迁移到 userSettings.ts，此文件保留为兼容层，
+ * 确保现有代码无需改动就能使用云端同步能力。
  */
+
+import {
+  getApiConfigs,
+  saveApiConfigs,
+  getModelApiConfig as settingsGetModelApiConfig,
+  saveModelApiConfig as settingsSaveModelApiConfig,
+  clearModelApiConfig as settingsClearModelApiConfig,
+  clearAllApiConfigs,
+} from "./userSettings";
 
 export type ModelType = "gpt-2" | "flux-2-pro" | "qs-gpt-image-2" | "v-api-gpt-image-2" | "v-api-seedream-4-5";
 
@@ -17,68 +28,39 @@ export type UserApiConfig = {
   [key in ModelType]?: ModelApiConfig;
 };
 
-const STORAGE_KEY = "exif-user-api-config";
-
 /**
  * 从 localStorage 读取用户的 API 配置
  */
 export const loadUserApiConfig = (): UserApiConfig | null => {
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) return null;
-    return JSON.parse(stored) as UserApiConfig;
-  } catch {
-    return null;
-  }
+  return getApiConfigs();
 };
 
 /**
  * 为特定模型保存 API 配置
  */
 export const saveModelApiConfig = (modelType: ModelType, config: ModelApiConfig): void => {
-  try {
-    const allConfigs = loadUserApiConfig() || {};
-    allConfigs[modelType] = config;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(allConfigs));
-  } catch {
-    // localStorage 不可用时静默失败
-  }
+  settingsSaveModelApiConfig(modelType, config);
 };
 
 /**
  * 获取特定模型的 API 配置
  */
 export const getModelApiConfig = (modelType: ModelType): ModelApiConfig | null => {
-  const allConfigs = loadUserApiConfig();
-  return allConfigs?.[modelType] || null;
+  return settingsGetModelApiConfig(modelType);
 };
 
 /**
  * 清除特定模型的 API 配置
  */
 export const clearModelApiConfig = (modelType: ModelType): void => {
-  try {
-    const allConfigs = loadUserApiConfig() || {};
-    delete allConfigs[modelType];
-    if (Object.keys(allConfigs).length === 0) {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } else {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(allConfigs));
-    }
-  } catch {
-    // localStorage 不可用时静默失败
-  }
+  settingsClearModelApiConfig(modelType);
 };
 
 /**
  * 清除所有用户的 API 配置
  */
 export const clearUserApiConfig = (): void => {
-  try {
-    window.localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // localStorage 不可用时静默失败
-  }
+  clearAllApiConfigs();
 };
 
 /**

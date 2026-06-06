@@ -44,7 +44,9 @@ import { playSound, type SoundEffect } from "./lib/soundEffects";
 import { recognizePhotoBatch } from "./lib/visionClient";
 import type { JournalDraft, PhotoAsset, StyleId, TemplateId, UserAnswers, SavedTemplate } from "./types";
 import { getAvailableModels, hasApiKeyForModel, MODEL_CONFIGS, type ModelType } from "./lib/modelConfig";
-import { getAllTemplates, saveTemplate, deleteTemplate } from "./lib/templateManager";
+import { getAllTemplates, getAllTemplatesAsync, saveTemplate, deleteTemplate } from "./lib/templateManager";
+import { ensureAnonymousLogin } from "./lib/cloudbase";
+import { initializeUserSettings, getSoundEnabled, saveSoundEnabled } from "./lib/userSettings";
 import { EditableTagGroup } from "./components/EditableTagGroup";
 import { addTag, removeTag } from "./lib/tagManager";
 import { getAllCustomTags, saveCustomTags } from "./lib/customTagsStorage";
@@ -117,13 +119,7 @@ function App() {
   /** VLM 自动识图状态：进行中标志 + 上次错误（便于面板内提示）。 */
   const [isVisionLoading, setIsVisionLoading] = useState(false);
   const [visionError, setVisionError] = useState("");
-  const [soundEnabled, setSoundEnabled] = useState(() => {
-    try {
-      return window.localStorage.getItem("journal-sound") !== "off";
-    } catch {
-      return true;
-    }
-  });
+  const [soundEnabled, setSoundEnabled] = useState(() => getSoundEnabled());
   const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>(() => getAllTemplates());
   const [showTemplateManager, setShowTemplateManager] = useState(false);
 
@@ -156,7 +152,25 @@ function App() {
     play("tap");
   };
 
-  // 监听 localStorage 变化，确保模板列表始终同步
+  // 应用启动时：匿名登录 + 从云端拉取最新设置 + 加载模板列表
+  useEffect(() => {
+    void initializeUserSettings()
+      .then(() => Promise.all([
+        getAllTemplatesAsync(),
+        // 刷新声音设置（可能从云端拉取了新值）
+        Promise.resolve(setSoundEnabled(getSoundEnabled())),
+      ]))
+      .then(([cloudTemplates]) => {
+        if (cloudTemplates.length > 0) {
+          setSavedTemplates(cloudTemplates);
+        }
+      })
+      .catch(() => {
+        // 网络失败时沿用本地缓存，静默处理
+      });
+  }, []);
+
+  // 监听 localStorage 变化（跨 Tab 同步），确保模板列表始终同步
   useEffect(() => {
     const handleStorageChange = () => {
       setSavedTemplates(getAllTemplates());
@@ -179,11 +193,7 @@ function App() {
   }, [isInfoOpen]);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem("journal-sound", soundEnabled ? "on" : "off");
-    } catch {
-      // Local storage is optional; the sound switch still works for the current session.
-    }
+    saveSoundEnabled(soundEnabled);
   }, [soundEnabled]);
 
   // 遮罩挂载/卸载节奏控制：进入立即、退出延迟 320ms（与 CSS leave 动画同步）。
