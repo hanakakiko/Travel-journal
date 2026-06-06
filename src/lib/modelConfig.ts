@@ -135,7 +135,7 @@ export const getModelConfig = (modelType: ModelType): ModelConfig => {
 
 /**
  * 检查模型是否有可用的 API Key
- * 优先级：用户配置 > 环境变量 > 本地配置文件
+ * 优先级：用户配置 > 环境变量 > 本地配置文件 > CloudBase（V-API 模型）
  */
 export const hasApiKeyForModel = (modelType: ModelType): boolean => {
   const userConfigs = loadUserApiConfig();
@@ -151,7 +151,15 @@ export const hasApiKeyForModel = (modelType: ModelType): boolean => {
 
   // 从环境变量或本地配置文件中获取 API Key
   const apiKey = getApiKey(config.apiTokenEnvVar as any);
-  return !!apiKey;
+  if (apiKey) return true;
+
+  // 对于 V-API 模型，即使没有直接配置，也可以通过 CloudBase 云函数获取
+  // 所以这两个模型始终认为是"可用"的
+  if (modelType === "v-api-gpt-image-2" || modelType === "v-api-seedream-4-5") {
+    return true;
+  }
+
+  return false;
 };
 
 /**
@@ -182,4 +190,24 @@ export const isAspectRatioSupported = (modelType: ModelType, aspectRatio: string
 export const isOutputFormatSupported = (modelType: ModelType, format: string): boolean => {
   const config = getModelConfig(modelType);
   return config.supportedOutputFormats.includes(format);
+};
+
+/**
+ * 检查模型是否直接配置了 API Key（不考虑 CloudBase 后备）
+ * 用于判断是否需要显示"已配置"vs"付费额度"
+ */
+export const hasDirectApiKeyForModel = (modelType: ModelType): boolean => {
+  const userConfigs = loadUserApiConfig();
+  
+  // 如果用户已在 UI 中为该模型配置了 API Key
+  if (userConfigs && modelType in userConfigs && userConfigs[modelType as keyof typeof userConfigs]?.apiKey) {
+    return true;
+  }
+
+  // 检查环境变量或本地配置文件中是否有 API Key
+  const config = MODEL_CONFIGS[modelType];
+  if (!config || !config.apiTokenEnvVar) return false;
+
+  const apiKey = getApiKey(config.apiTokenEnvVar as any);
+  return !!apiKey;
 };

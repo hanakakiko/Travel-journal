@@ -4,6 +4,7 @@ import { formatDate } from "./format";
 import { callModelAPI } from "./modelRouter";
 import { loadUserApiConfig } from "./userApiConfig";
 import { getApiKey } from "./api-keys.local";
+import { getVApiKeyFromCloudFunction } from "./cloudbase";
 
 /** 从数组中随机选择一个元素 */
 const randomPick = <T,>(items: T[]): T => items[Math.floor(Math.random() * items.length)];
@@ -1363,23 +1364,34 @@ const callVApiGptImage2Once = async ({
   targetHeight = DEFAULT_GEN_HEIGHT,
   timeoutMs = 300_000,
 }: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
-  // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件
+  const vlog = createModelLogger("V-API GPT Image 2");
+  
+  // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件，最后从 CloudBase 获取
   const userConfigs = loadUserApiConfig();
   const userVApiConfig = userConfigs?.["v-api-gpt-image-2"];
-  const apiKey = userVApiConfig?.apiKey || getApiKey("VITE_V_API_GPT_IMAGE_2_API_KEY");
+  let apiKey = userVApiConfig?.apiKey || getApiKey("VITE_V_API_GPT_IMAGE_2_API_KEY");
+
+  // 如果没有配置的 API Key，从 CloudBase 云函数获取
+  if (!apiKey) {
+    vlog("正在从 CloudBase 获取 V-API Key...");
+    const cloudbaseApiKey = await getVApiKeyFromCloudFunction();
+    if (cloudbaseApiKey) {
+      apiKey = cloudbaseApiKey;
+      vlog("✓ 成功从 CloudBase 获取 V-API Key");
+    }
+  }
 
   if (!apiKey) {
     throw new Error(
       "V-API GPT Image 2 API Key 未配置。请在 src/lib/api-keys.local.ts 中配置 VITE_V_API_GPT_IMAGE_2_API_KEY，" +
       "或在 API 配置面板中输入你的 API Key，" +
-      "或在 .env 文件中设置 VITE_V_API_GPT_IMAGE_2_API_KEY。"
+      "或在 .env 文件中设置 VITE_V_API_GPT_IMAGE_2_API_KEY，" +
+      "或在 CloudBase 云函数环境变量中设置 V_API_KEY。"
     );
   }
 
   // 使用用户自定义端点或默认端点
   const endpoint = userVApiConfig?.customEndpoint || "https://api.v3.cm/v1/images/edits";
-
-  const vlog = createModelLogger("V-API GPT Image 2");
 
   // 获取参考图片 URLs
   const imageUrlList: string[] = [];
@@ -1648,23 +1660,34 @@ const callVApiSeedream4Once = async ({
   targetHeight = DEFAULT_GEN_HEIGHT,
   timeoutMs = 300_000,
 }: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
-  // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件
+  const slog = createModelLogger("V-API Seedream 4.5");
+  
+  // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件，最后从 CloudBase 获取
   const userConfigs = loadUserApiConfig();
   const userSeedreamConfig = userConfigs?.["v-api-seedream-4-5"];
-  const apiKey = userSeedreamConfig?.apiKey || getApiKey("VITE_V_API_SEEDREAM_4_5_API_KEY");
+  let apiKey = userSeedreamConfig?.apiKey || getApiKey("VITE_V_API_SEEDREAM_4_5_API_KEY");
+
+  // 如果没有配置的 API Key，从 CloudBase 云函数获取
+  if (!apiKey) {
+    slog("正在从 CloudBase 获取 V-API Key...");
+    const cloudbaseApiKey = await getVApiKeyFromCloudFunction();
+    if (cloudbaseApiKey) {
+      apiKey = cloudbaseApiKey;
+      slog("✓ 成功从 CloudBase 获取 V-API Key");
+    }
+  }
 
   if (!apiKey) {
     throw new Error(
       "V-API Seedream 4.5 API Key 未配置。请在 src/lib/api-keys.local.ts 中配置 VITE_V_API_SEEDREAM_4_5_API_KEY，" +
       "或在 API 配置面板中输入你的 API Key，" +
-      "或在 .env 文件中设置 VITE_V_API_SEEDREAM_4_5_API_KEY。"
+      "或在 .env 文件中设置 VITE_V_API_SEEDREAM_4_5_API_KEY，" +
+      "或在 CloudBase 云函数环境变量中设置 V_API_KEY。"
     );
   }
 
   // 使用用户自定义端点或默认端点
   const endpoint = userSeedreamConfig?.customEndpoint || "https://api.v3.cm/v1/images/edits";
-
-  const slog = createModelLogger("V-API Seedream 4.5");
 
   // 获取参考图片 URLs（支持 1-10 张）
   const imageUrlList: string[] = [];

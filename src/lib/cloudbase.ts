@@ -80,3 +80,34 @@ export async function getCurrentSession() {
 export function getDb() {
   return getApp().database();
 }
+
+// ── 云函数调用 ────────────────────────────────────────────────────────────
+
+/**
+ * 从 CloudBase 云函数中获取 V-API Key
+ * 云函数会从环境变量 V_API_KEY 中读取密钥
+ */
+export async function getVApiKeyFromCloudFunction(): Promise<string | null> {
+  try {
+    const app = getApp();
+    
+    // 确保用户已登录
+    await ensureAnonymousLogin();
+    
+    // 调用云函数获取 API Key
+    const result = await app.callFunction({
+      name: "getVApiKey",
+      data: {},
+    });
+    
+    // 检查返回值
+    if (result?.result?.code === 0 && result.result?.data?.apiKey) {
+      return result.result.data.apiKey;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("从 CloudBase 获取 V-API Key 失败:", error);
+    return null;
+  }
+}
