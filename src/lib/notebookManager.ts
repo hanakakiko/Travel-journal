@@ -329,8 +329,8 @@ export async function updateNotebook(
       updatedAt: Date.now(),
     });
 
-  if (!isSuccess(result)) {
-    throw new Error(`更新手帐本失败: ${result.message || JSON.stringify(result)}`);
+  if (!isWriteAccepted(result)) {
+    throw new Error(`更新手帐本失败: ${getResultMessage(result)}`);
   }
 }
 
