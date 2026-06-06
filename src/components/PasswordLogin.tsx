@@ -157,12 +157,23 @@ export function PasswordLogin({ onSignUpClick, onLoginSuccess }: PasswordLoginPr
              padding: '8px 12px',
              border: '2px solid var(--ink)',
              borderRadius: '14px',
-             background: loginMode === 'password' ? 'var(--ink)' : '#fffcf7',
-             color: loginMode === 'password' ? '#fff7eb' : 'var(--ink)',
+             background: 'var(--ink)',
+             color: '#fff7eb',
              fontWeight: 900,
              fontSize: '14px',
              cursor: 'pointer',
              transition: 'all 0.2s ease',
+             opacity: loginMode === 'password' ? 1 : 0.7,
+           }}
+           onMouseEnter={(e) => {
+             if (loginMode !== 'password') {
+               e.currentTarget.style.opacity = '0.85';
+             }
+           }}
+           onMouseLeave={(e) => {
+             if (loginMode !== 'password') {
+               e.currentTarget.style.opacity = '0.7';
+             }
            }}
          >
            密码登录
@@ -177,12 +188,23 @@ export function PasswordLogin({ onSignUpClick, onLoginSuccess }: PasswordLoginPr
              padding: '8px 12px',
              border: '2px solid var(--ink)',
              borderRadius: '14px',
-             background: loginMode === 'email-otp' ? 'var(--ink)' : '#fffcf7',
-             color: loginMode === 'email-otp' ? '#fff7eb' : 'var(--ink)',
+             background: 'var(--ink)',
+             color: '#fff7eb',
              fontWeight: 900,
              fontSize: '14px',
              cursor: 'pointer',
              transition: 'all 0.2s ease',
+             opacity: loginMode === 'email-otp' ? 1 : 0.7,
+           }}
+           onMouseEnter={(e) => {
+             if (loginMode !== 'email-otp') {
+               e.currentTarget.style.opacity = '0.85';
+             }
+           }}
+           onMouseLeave={(e) => {
+             if (loginMode !== 'email-otp') {
+               e.currentTarget.style.opacity = '0.7';
+             }
            }}
          >
            验证码登录

@@ -55,68 +55,86 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
            </h1>
          </div>
 
-         {/* 标签切换 - 使用全局 segmented 风格 */}
-         <div className="segmented" style={{
-           display: 'grid',
-           gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-           gap: '10px',
-           marginBottom: '24px',
-           marginLeft: '0',
-           marginRight: '0',
-         }}>
-           <button
-             onClick={() => setMode('login')}
-             className={mode === 'login' ? 'is-active' : ''}
-             style={{
-               minHeight: '46px',
-               padding: '10px 16px',
-               border: '2px solid var(--ink)',
-               borderRadius: '16px',
-               background: mode === 'login' ? 'var(--ink)' : '#fffcf7',
-               color: mode === 'login' ? '#fff7eb' : 'var(--ink)',
-               fontWeight: 900,
-               fontSize: '16px',
-               cursor: 'pointer',
-               display: 'flex',
-               alignItems: 'center',
-               justifyContent: 'center',
-               gap: '8px',
-               transition: 'all 0.2s ease',
-               boxShadow: mode === 'login' ? '3px 4px 0 rgba(38, 29, 26, 0.1)' : 'none',
-             }}
-             onMouseEnter={(e) => !mode ? (e.currentTarget.style.background = 'rgba(23, 18, 15, 0.08)') : undefined}
-             onMouseLeave={(e) => !(mode === 'login') ? (e.currentTarget.style.background = '#fffcf7') : undefined}
-           >
-             <LogIn size={18} />
-             <span>登录</span>
-           </button>
-           <button
-             onClick={() => setMode('signup')}
-             className={mode === 'signup' ? 'is-active' : ''}
-             style={{
-               minHeight: '46px',
-               padding: '10px 16px',
-               border: '2px solid var(--ink)',
-               borderRadius: '16px',
-               background: mode === 'signup' ? 'var(--ink)' : '#fffcf7',
-               color: mode === 'signup' ? '#fff7eb' : 'var(--ink)',
-               fontWeight: 900,
-               fontSize: '16px',
-               cursor: 'pointer',
-               display: 'flex',
-               alignItems: 'center',
-               justifyContent: 'center',
-               gap: '8px',
-               transition: 'all 0.2s ease',
-               boxShadow: mode === 'signup' ? '3px 4px 0 rgba(38, 29, 26, 0.1)' : 'none',
-             }}
-             onMouseEnter={(e) => mode !== 'signup' ? (e.currentTarget.style.background = 'rgba(23, 18, 15, 0.08)') : undefined}
-             onMouseLeave={(e) => mode !== 'signup' ? (e.currentTarget.style.background = '#fffcf7') : undefined}
-           >
-             <Mail size={18} />
-             <span>注册</span>
-           </button>
-         </div>
+          {/* 标签切换 - 使用全局 segmented 风格 */}
+          <div className="segmented" style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gap: '10px',
+            marginBottom: '24px',
+            marginLeft: '0',
+            marginRight: '0',
+          }}>
+            <button
+              onClick={() => setMode('login')}
+              className={mode === 'login' ? 'is-active' : ''}
+              style={{
+                minHeight: '46px',
+                padding: '10px 16px',
+                border: '2px solid var(--ink)',
+                borderRadius: '16px',
+                background: mode === 'login' ? 'var(--ink)' : 'var(--ink)',
+                color: '#fff7eb',
+                fontWeight: 900,
+                fontSize: '16px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.2s ease',
+                boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.15)',
+                opacity: mode === 'login' ? 1 : 0.75,
+              }}
+              onMouseEnter={(e) => {
+                if (mode !== 'login') {
+                  e.currentTarget.style.opacity = '0.9';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (mode !== 'login') {
+                  e.currentTarget.style.opacity = '0.75';
+                }
+              }}
+            >
+              <LogIn size={18} />
+              <span>登录</span>
+            </button>
+            <button
+              onClick={() => setMode('signup')}
+              className={mode === 'signup' ? 'is-active' : ''}
+              style={{
+                minHeight: '46px',
+                padding: '10px 16px',
+                border: '2px solid var(--ink)',
+                borderRadius: '16px',
+                background: mode === 'signup' ? 'var(--ink)' : 'var(--ink)',
+                color: '#fff7eb',
+                fontWeight: 900,
+                fontSize: '16px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.2s ease',
+                boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.15)',
+                opacity: mode === 'signup' ? 1 : 0.75,
+              }}
+              onMouseEnter={(e) => {
+                if (mode !== 'signup') {
+                  e.currentTarget.style.opacity = '0.9';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (mode !== 'signup') {
+                  e.currentTarget.style.opacity = '0.75';
+                }
+              }}
+            >
+              <Mail size={18} />
+              <span>注册</span>
+            </button>
+          </div>
 
          {/* 内容区域 */}
           <div>
@@ -140,8 +158,8 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
                       padding: '8px 12px',
                       border: '2px solid var(--ink)',
                       borderRadius: '14px',
-                      background: signUpMethod === 'email' ? 'var(--ink)' : '#fffcf7',
-                      color: signUpMethod === 'email' ? '#fff7eb' : 'var(--ink)',
+                      background: 'var(--ink)',
+                      color: '#fff7eb',
                       fontWeight: 900,
                       fontSize: '14px',
                       cursor: 'pointer',
@@ -150,6 +168,17 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
                       justifyContent: 'center',
                       gap: '6px',
                       transition: 'all 0.2s ease',
+                      opacity: signUpMethod === 'email' ? 1 : 0.7,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (signUpMethod !== 'email') {
+                        e.currentTarget.style.opacity = '0.85';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (signUpMethod !== 'email') {
+                        e.currentTarget.style.opacity = '0.7';
+                      }
                     }}
                   >
                     <Mail size={16} />
@@ -162,8 +191,8 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
                       padding: '8px 12px',
                       border: '2px solid var(--ink)',
                       borderRadius: '14px',
-                      background: signUpMethod === 'username' ? 'var(--ink)' : '#fffcf7',
-                      color: signUpMethod === 'username' ? '#fff7eb' : 'var(--ink)',
+                      background: 'var(--ink)',
+                      color: '#fff7eb',
                       fontWeight: 900,
                       fontSize: '14px',
                       cursor: 'pointer',
@@ -172,6 +201,17 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
                       justifyContent: 'center',
                       gap: '6px',
                       transition: 'all 0.2s ease',
+                      opacity: signUpMethod === 'username' ? 1 : 0.7,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (signUpMethod !== 'username') {
+                        e.currentTarget.style.opacity = '0.85';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (signUpMethod !== 'username') {
+                        e.currentTarget.style.opacity = '0.7';
+                      }
                     }}
                   >
                     <User size={16} />
