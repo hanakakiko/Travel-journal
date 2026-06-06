@@ -10,6 +10,8 @@ import {
   GripVertical,
   X,
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Pencil,
   Upload,
   Save,
@@ -55,7 +57,7 @@ export function NotebookDetailModal({
   const [pages, setPages] = useState<JournalPageEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
   const [isReordering, setIsReordering] = useState(false);
   const [isUploadingPages, setIsUploadingPages] = useState(false);
@@ -69,13 +71,104 @@ export function NotebookDetailModal({
   const [isSavingNotebook, setIsSavingNotebook] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const previewTouchStartXRef = useRef<number | null>(null);
+
+  const selectedPage =
+    selectedImageIndex === null ? null : pages[selectedImageIndex] ?? null;
+  const selectedPageNumber = selectedImageIndex === null ? 0 : selectedImageIndex + 1;
+  const canSwitchPreview = pages.length > 1;
 
   useEffect(() => {
     loadPages();
     setIsEditingNotebook(false);
     setEditName(notebook.name);
     setEditCoverPreview(notebook.coverImageUrl);
+    setSelectedImageIndex(null);
   }, [notebook.id]);
+
+  useEffect(() => {
+    if (selectedImageIndex === null) return;
+
+    if (pages.length === 0) {
+      setSelectedImageIndex(null);
+      return;
+    }
+
+    if (selectedImageIndex >= pages.length) {
+      setSelectedImageIndex(pages.length - 1);
+    }
+  }, [pages.length, selectedImageIndex]);
+
+  useEffect(() => {
+    if (selectedImageIndex === null) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedImageIndex(null);
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        switchPreviewImage("previous");
+        return;
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        switchPreviewImage("next");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedImageIndex, pages.length]);
+
+  const switchPreviewImage = (direction: "previous" | "next") => {
+    setSelectedImageIndex((currentIndex) => {
+      if (currentIndex === null || pages.length === 0) return currentIndex;
+
+      if (direction === "previous") {
+        return currentIndex === 0 ? pages.length - 1 : currentIndex - 1;
+      }
+
+      return currentIndex === pages.length - 1 ? 0 : currentIndex + 1;
+    });
+  };
+
+  const handlePreviewTouchStart = (event: React.TouchEvent) => {
+    previewTouchStartXRef.current = event.touches[0]?.clientX ?? null;
+  };
+
+  const handlePreviewTouchEnd = (event: React.TouchEvent) => {
+    const startX = previewTouchStartXRef.current;
+    previewTouchStartXRef.current = null;
+
+    if (startX === null || !canSwitchPreview) return;
+
+    const endX = event.changedTouches[0]?.clientX;
+    if (typeof endX !== "number") return;
+
+    const deltaX = endX - startX;
+    if (Math.abs(deltaX) < 48) return;
+
+    switchPreviewImage(deltaX > 0 ? "previous" : "next");
+  };
+
+  const openPagePreview = (index: number) => {
+    if (isUploadingPages || isSavingNotebook || draggedItem !== null) return;
+    setSelectedImageIndex(index);
+  };
+
+  const handlePageCardKeyDown = (
+    event: React.KeyboardEvent<HTMLDivElement>,
+    index: number
+  ) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+
+    event.preventDefault();
+    openPagePreview(index);
+  };
 
   const loadPages = async () => {
     try {
@@ -470,15 +563,17 @@ export function NotebookDetailModal({
                   onDragStart={() => handleDragStart(index)}
                   onDragOver={handleDragOver}
                   onDrop={() => handleDrop(index)}
+                  onClick={() => openPagePreview(index)}
+                  onKeyDown={(event) => handlePageCardKeyDown(event, index)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`打开第 ${index + 1} 页大图`}
                   className={`notebook-page-card ${
                     draggedItem === index ? "dragging" : ""
                   }`}
                 >
                   {/* 图片 */}
-                  <div
-                    className="notebook-page-image"
-                    onClick={() => setSelectedImage(page.imageUrl)}
-                  >
+                  <div className="notebook-page-image">
                     <img
                       src={page.imageUrl}
                       alt={`第 ${index + 1} 页`}
@@ -508,20 +603,53 @@ export function NotebookDetailModal({
       </div>
 
       {/* 图片预览弹窗 */}
-      {selectedImage && (
+      {selectedPage && (
         <div
           className="notebook-image-preview-overlay"
-          onClick={() => setSelectedImage(null)}
+          onClick={() => setSelectedImageIndex(null)}
         >
           <div
             className="notebook-image-preview-container"
             onClick={(e) => e.stopPropagation()}
+            onTouchStart={handlePreviewTouchStart}
+            onTouchEnd={handlePreviewTouchEnd}
           >
-            <img src={selectedImage} alt="预览" />
+            {canSwitchPreview && (
+              <button
+                type="button"
+                onClick={() => switchPreviewImage("previous")}
+                className="notebook-preview-nav notebook-preview-nav-left"
+                title="上一张"
+                aria-label="上一张"
+              >
+                <ChevronLeft size={32} />
+              </button>
+            )}
+
+            <img src={selectedPage.imageUrl} alt={`第 ${selectedPageNumber} 页预览`} />
+
+            {canSwitchPreview && (
+              <button
+                type="button"
+                onClick={() => switchPreviewImage("next")}
+                className="notebook-preview-nav notebook-preview-nav-right"
+                title="下一张"
+                aria-label="下一张"
+              >
+                <ChevronRight size={32} />
+              </button>
+            )}
+
+            <div className="notebook-preview-count">
+              {selectedPageNumber} / {pages.length}
+            </div>
+
             <button
-              onClick={() => setSelectedImage(null)}
+              type="button"
+              onClick={() => setSelectedImageIndex(null)}
               className="notebook-preview-close"
               title="关闭"
+              aria-label="关闭预览"
             >
               <X size={28} />
             </button>

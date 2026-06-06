@@ -346,6 +346,7 @@
   opacity: 0;
   transition: all 0.2s;
   backdrop-filter: blur(1px);
+  pointer-events: none;
 }
 
 .notebook-page-card:hover .notebook-page-overlay {
@@ -370,6 +371,7 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  pointer-events: auto;
 }
 
 .notebook-page-delete:active {
@@ -394,6 +396,7 @@
   font-weight: 500;
   border-radius: 4px;
   backdrop-filter: blur(2px);
+  pointer-events: none;
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -428,6 +431,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: pan-y;
 }
 
 .notebook-image-preview-container img {
@@ -435,6 +439,56 @@
   max-height: 80vh;
   object-fit: contain;
   border-radius: 8px;
+}
+
+.notebook-preview-nav {
+  position: fixed;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  transition: all 0.2s;
+  backdrop-filter: blur(6px);
+}
+
+.notebook-preview-nav:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.notebook-preview-nav:active {
+  transform: translateY(-50%) scale(0.94);
+}
+
+.notebook-preview-nav-left {
+  left: 20px;
+}
+
+.notebook-preview-nav-right {
+  right: 20px;
+}
+
+.notebook-preview-count {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  backdrop-filter: blur(6px);
 }
 
 .notebook-preview-close {
@@ -649,5 +703,33 @@
   .notebook-edit-cover {
     width: 100%;
     max-height: 220px;
+  }
+}
+
+@media (max-width: 560px) {
+  .notebook-image-preview-overlay {
+    padding: 12px;
+  }
+
+  .notebook-image-preview-container img {
+    max-height: 78vh;
+  }
+
+  .notebook-preview-nav {
+    width: 40px;
+    height: 40px;
+  }
+
+  .notebook-preview-nav-left {
+    left: 12px;
+  }
+
+  .notebook-preview-nav-right {
+    right: 12px;
+  }
+
+  .notebook-preview-close {
+    top: -44px;
+    right: -4px;
   }
 }

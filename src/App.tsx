@@ -73,7 +73,7 @@ const defaultAnswers: UserAnswers = {
    decorations: [],
    visionTags: {},
    customTags: {},  // 不在这里初始化，在 useState 中动态获取
-   selectedModel: "flux-2-pro",  // 默认使用 FLUX.2 Pro
+   selectedModel: "v-api-gpt-image-2",  // 默认使用 V-API GPT Image 2
    confessionText: "",
    includeConfessionInImage: true,  // 默认勾选"融入画面生成"
    showConfessionInImage: false,    // 默认不勾选"放在画面中"

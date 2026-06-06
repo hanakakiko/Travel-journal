@@ -20,6 +20,9 @@
  *   6. **图片压缩**：上传前自动压缩图片，减少存储和 token 消耗。
  */
 
+import { ensureAnonymousLogin, getApp } from "./cloudbase";
+import { getUploadProvider } from "./deploymentMode";
+
 /** 上传基础 URL（含协议、bucket-region 域名，不含末尾斜杠）。 */
 const COS_PUT_BASE =
   (import.meta.env.VITE_COS_PUT_BASE as string | undefined)?.replace(/\/+$/, "") ||
@@ -103,6 +106,12 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 const COS_DEBUG = import.meta.env.DEV;
 const clog = (...args: unknown[]) => {
   if (COS_DEBUG) console.info("[COS]", ...args);
+};
+
+const makeBrowserFile = (blob: Blob, file: File, contentType: string): File | Blob => {
+  if (blob instanceof File) return blob;
+  if (typeof File === "undefined") return blob;
+  return new File([blob], file.name, { type: contentType || file.type || "application/octet-stream" });
 };
 
 /**
@@ -197,6 +206,42 @@ const compressImage = async (file: File): Promise<Blob> => {
   });
 };
 
+const uploadToCloudbaseStorage = async (
+  file: File,
+  uploadBlob: Blob,
+  contentType: string,
+): Promise<string> => {
+  await ensureAnonymousLogin();
+  const app = getApp();
+  const objectKey = buildObjectKey(file);
+  const uploadFile = makeBrowserFile(uploadBlob, file, contentType);
+
+  clog("CloudBase upload →", objectKey, { size: uploadBlob.size, type: contentType });
+
+  const uploadResult = await app.uploadFile({
+    cloudPath: objectKey,
+    filePath: uploadFile as unknown as string,
+  });
+
+  const fileID = uploadResult?.fileID;
+  if (!fileID) {
+    throw new Error("CloudBase 云存储上传成功但未返回 fileID");
+  }
+
+  const urlResult = await app.getTempFileURL({
+    fileList: [fileID],
+  });
+  const firstFile = urlResult?.fileList?.[0];
+  const tempUrl = firstFile?.tempFileURL || firstFile?.download_url;
+
+  if (!tempUrl) {
+    throw new Error(firstFile?.message || "CloudBase 云存储未返回临时访问链接");
+  }
+
+  clog("CloudBase upload ←", tempUrl);
+  return tempUrl;
+};
+
 /**
  * 把本地 File PUT 上传到 COS，成功返回可被 LLM 访问的公网 URL。
  * 上传前会自动压缩图片以减少存储和 token 消耗。
@@ -229,6 +274,10 @@ export const uploadToCos = async (file: File, timeoutMs: number = DEFAULT_TIMEOU
   const requestUrl = buildRequestUrl(objectKey);
   const publicUrl = buildPublicUrl(objectKey);
   const contentType = file.type || "application/octet-stream";
+
+  if (getUploadProvider() === "cloudbase") {
+    return await uploadToCloudbaseStorage(file, uploadBlob, contentType);
+  }
 
   clog("PUT →", requestUrl, { size: uploadBlob.size, type: contentType, viaProxy: USE_DEV_PROXY });
 

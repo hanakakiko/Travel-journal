@@ -6,6 +6,7 @@
  */
 
 import cloudbase from "@cloudbase/js-sdk";
+import type { ModelType } from "./modelConfig";
 
 const ENV_ID = "my-travel-journal-d5d06m1a517f14";
 const REGION = "ap-shanghai";
@@ -35,7 +36,15 @@ export async function ensureAnonymousLogin(): Promise<void> {
   const app = getApp();
   const auth = app.auth({ persistence: 'local' });
 
-  // 检查是否已有登录态
+  // 先检查正式登录 session，避免已登录用户被匿名登录覆盖。
+  try {
+    const { data } = await auth.getSession();
+    if (data?.session) return;
+  } catch {
+    // 兼容旧版登录态检查，继续走 getLoginState。
+  }
+
+  // 检查是否已有旧版/匿名登录态
   const loginState = await auth.getLoginState();
   if (loginState) return;
 
@@ -110,4 +119,65 @@ export async function getVApiKeyFromCloudFunction(): Promise<string | null> {
     console.error("从 CloudBase 获取 V-API Key 失败:", error);
     return null;
   }
+}
+
+// ── AI 生成云函数代理 ─────────────────────────────────────────────────────
+
+export type CloudbaseGenerateImageRequest = {
+  modelType: ModelType;
+  prompt: string;
+  imageUrls: string[];
+  targetWidth?: number;
+  targetHeight?: number;
+  timeoutMs?: number;
+  /** 兼容现有 getVApiKey 云函数；更推荐直接把 V_API_KEY 配到 generateImage 云函数环境变量。 */
+  apiKeyOverride?: string;
+};
+
+export type CloudbaseGenerateImageResult = {
+  imageUrl: string;
+  raw: unknown;
+};
+
+/**
+ * 通过 CloudBase 云函数调用图像生成模型。
+ * 生产环境使用它来避免浏览器 CORS，并把 API Key 留在云函数环境变量中。
+ */
+export async function callGenerateImageFunction(
+  data: CloudbaseGenerateImageRequest,
+): Promise<CloudbaseGenerateImageResult> {
+  const app = getApp();
+  await ensureAnonymousLogin();
+
+  const payloadData = { ...data };
+  if (
+    (data.modelType === "v-api-gpt-image-2" || data.modelType === "v-api-seedream-4-5") &&
+    !payloadData.apiKeyOverride
+  ) {
+    payloadData.apiKeyOverride = (await getVApiKeyFromCloudFunction()) ?? undefined;
+  }
+
+  const result = await app.callFunction({
+    name: "generateImage",
+    data: payloadData,
+  });
+
+  const payload = result?.result;
+  if (!payload || payload.code !== 0) {
+    const message =
+      payload?.message ||
+      payload?.error ||
+      "CloudBase generateImage 云函数调用失败，请检查云函数日志";
+    throw new Error(String(message));
+  }
+
+  const imageUrl = payload?.data?.imageUrl;
+  if (typeof imageUrl !== "string" || !imageUrl.trim()) {
+    throw new Error("CloudBase generateImage 云函数未返回图片链接");
+  }
+
+  return {
+    imageUrl,
+    raw: payload?.data?.raw ?? payload,
+  };
 }
