@@ -40,6 +40,7 @@ interface AuthContextType {
   signUpWithUsername: (
     username: string,
     password: string,
+    email?: string,
     nickname?: string
   ) => Promise<{ data?: any; error?: any }>;
   
@@ -185,13 +186,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUpWithUsername = async (
     username: string,
     password: string,
+    email?: string,
     nickname?: string
   ): Promise<{ data?: any; error?: any }> => {
     try {
       const auth = getCloudbaseApp().auth({ persistence: 'local' });
       const params: any = { username, password };
+      if (email) params.email = email;
       if (nickname) params.nickname = nickname;
-      console.log('[Auth] signUpWithUsername params:', { username, password: '***', nickname });
+      console.log('[Auth] signUpWithUsername params:', { username, password: '***', email, nickname });
       const { data, error } = await auth.signUp(params);
       console.log('[Auth] signUpWithUsername result - error:', error);
       if (error) return { error };

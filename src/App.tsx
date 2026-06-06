@@ -51,6 +51,8 @@ import { getAllTemplates, getAllTemplatesAsync, saveTemplate, deleteTemplate } f
 import { ensureAnonymousLogin } from "./lib/cloudbase";
 import { initializeUserSettings, getSoundEnabled, saveSoundEnabled } from "./lib/userSettings";
 import { EditableTagGroup } from "./components/EditableTagGroup";
+import { NotebookShelf } from "./components/NotebookShelf";
+import { SaveToNotebookModal } from "./components/SaveToNotebookModal";
 import { addTag, removeTag } from "./lib/tagManager";
 import { getAllCustomTags, saveCustomTags } from "./lib/customTagsStorage";
 import { saveFormDraft, loadFormDraft, clearFormDraft, hasFormDraft } from "./lib/formDraftStorage";
@@ -302,6 +304,10 @@ function AppContent({
   const hasDraftContent = photos.length > 0;
   const [showDraftRecoveryTip, setShowDraftRecoveryTip] = useState(true);
   const [draftWasRecovered] = useState(hasFormDraft() && hasDraftContent);
+
+  // 手帐本功能相关状态
+  const [showNotebookShelf, setShowNotebookShelf] = useState(false);
+  const [showSaveToNotebook, setShowSaveToNotebook] = useState(false);
 
   const activeStyle = draft?.styleId ?? (styleId === "auto" ? "elegant" : styleId);
   const play = (effect: SoundEffect) => playSound(effect, soundEnabled);
@@ -783,38 +789,68 @@ function AppContent({
           <span style={{ fontWeight: '500', color: '#333' }}>
             {user?.nickname || user?.username || user?.email || '用户'}
           </span>
+         </div>
+         <div style={{ display: 'flex', gap: '0.5em' }}>
+           <button
+             onClick={() => setShowNotebookShelf(true)}
+             style={{
+               display: 'flex',
+               alignItems: 'center',
+               gap: '0.35em',
+               padding: '0.4em 0.8em',
+               backgroundColor: '#f5f5f5',
+               border: '1px solid #ddd',
+               borderRadius: '0.35em',
+               cursor: 'pointer',
+               fontSize: '0.85em',
+               color: '#666',
+               transition: 'all 0.2s',
+             }}
+             onMouseEnter={(e) => {
+               e.currentTarget.style.backgroundColor = '#efefef';
+               e.currentTarget.style.borderColor = '#ccc';
+             }}
+             onMouseLeave={(e) => {
+               e.currentTarget.style.backgroundColor = '#f5f5f5';
+               e.currentTarget.style.borderColor = '#ddd';
+             }}
+             title="查看和管理我的手帐本"
+           >
+             <BookOpen size={14} />
+             <span>我的手帐本</span>
+           </button>
+           <button
+             onClick={async () => {
+               await signOut();
+               setShowAuthPage(true);
+             }}
+             style={{
+               display: 'flex',
+               alignItems: 'center',
+               gap: '0.35em',
+               padding: '0.4em 0.8em',
+               backgroundColor: '#f5f5f5',
+               border: '1px solid #ddd',
+               borderRadius: '0.35em',
+               cursor: 'pointer',
+               fontSize: '0.85em',
+               color: '#666',
+               transition: 'all 0.2s',
+             }}
+             onMouseEnter={(e) => {
+               e.currentTarget.style.backgroundColor = '#efefef';
+               e.currentTarget.style.borderColor = '#ccc';
+             }}
+             onMouseLeave={(e) => {
+               e.currentTarget.style.backgroundColor = '#f5f5f5';
+               e.currentTarget.style.borderColor = '#ddd';
+             }}
+           >
+             <LogOut size={14} />
+             <span>登出</span>
+            </button>
+          </div>
         </div>
-        <button
-          onClick={async () => {
-            await signOut();
-            setShowAuthPage(true);
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.35em',
-            padding: '0.4em 0.8em',
-            backgroundColor: '#f5f5f5',
-            border: '1px solid #ddd',
-            borderRadius: '0.35em',
-            cursor: 'pointer',
-            fontSize: '0.85em',
-            color: '#666',
-            transition: 'all 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#efefef';
-            e.currentTarget.style.borderColor = '#ccc';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#f5f5f5';
-            e.currentTarget.style.borderColor = '#ddd';
-          }}
-        >
-          <LogOut size={14} />
-          <span>登出</span>
-         </button>
-       </div>
 
        {/* 草稿恢复提示 */}
        {showDraftRecoveryTip && draftWasRecovered && (
@@ -1079,13 +1115,14 @@ function AppContent({
 
       {draft && (
         <section className="book-band">
-          <GeneratedShowcase
-            draft={draft}
-            answers={answers}
-            onDownload={downloadGeneratedImage}
-            onSaveTemplate={handleSaveTemplate}
-            onSound={play}
-          />
+           <GeneratedShowcase
+             draft={draft}
+             answers={answers}
+             onDownload={downloadGeneratedImage}
+             onSaveTemplate={handleSaveTemplate}
+             onSaveToNotebook={() => setShowSaveToNotebook(true)}
+             onSound={play}
+           />
         </section>
       )}
 
@@ -1100,6 +1137,23 @@ function AppContent({
           message={error}
           onClose={() => setIsErrorAlertOpen(false)}
           onRetry={failedPhotosForRetry.length > 0 ? retryFailedPhotos : undefined}
+        />
+      )}
+
+      {/* 手帐展示架弹窗 */}
+      {showNotebookShelf && (
+        <NotebookShelf onClose={() => setShowNotebookShelf(false)} />
+      )}
+
+      {/* 保存到手帐本弹窗 */}
+      {showSaveToNotebook && draft?.generatedImageUrl && (
+        <SaveToNotebookModal
+          imageUrl={draft.generatedImageUrl}
+          imageTitle={draft.title}
+          onClose={() => setShowSaveToNotebook(false)}
+          onSuccess={() => {
+            play("success");
+          }}
         />
       )}
     </main>
@@ -1148,12 +1202,14 @@ function GeneratedShowcase({
   answers,
   onDownload,
   onSaveTemplate,
+  onSaveToNotebook,
   onSound,
 }: {
   draft: JournalDraft;
   answers: UserAnswers;
   onDownload: () => void;
   onSaveTemplate?: (name: string, coverImageUrl?: string) => void;
+  onSaveToNotebook?: () => void;
   onSound?: (effect: SoundEffect) => void;
 }) {
   const hasImage = Boolean(draft.generatedImageUrl);
@@ -1207,31 +1263,42 @@ function GeneratedShowcase({
             </small>
           )}
         </div>
-        <div style={{ display: "flex", gap: "0.5em", flexWrap: "wrap", justifyContent: "flex-end" }}>
-          {hasImage && (
-            <button type="button" className="generated-hero-download" onClick={onDownload}>
-              <ImageDown size={16} />
-              <span>下载图</span>
-            </button>
-          )}
-          {onSaveTemplate && (
-            <button
-              type="button"
-              className="generated-hero-download"
-              onClick={() => {
-                const name = window.prompt("请输入模板名称（保存本次的选项配置）：");
-                if (name?.trim()) {
-                  onSaveTemplate(name.trim(), draft.generatedImageUrl);
-                  onSound?.("success");
-                }
-              }}
-              title="保存当前配置为模板，下次可快速应用"
-            >
-              <Save size={16} />
-              <span>保存选项</span>
-            </button>
-          )}
-        </div>
+         <div style={{ display: "flex", gap: "0.5em", flexWrap: "wrap", justifyContent: "flex-end" }}>
+           {hasImage && (
+             <button type="button" className="generated-hero-download" onClick={onDownload}>
+               <ImageDown size={16} />
+               <span>下载图</span>
+             </button>
+           )}
+           {hasImage && onSaveToNotebook && (
+             <button
+               type="button"
+               className="generated-hero-download"
+               onClick={onSaveToNotebook}
+               title="保存到手帐本"
+             >
+               <BookOpen size={16} />
+               <span>保存到手帐本</span>
+             </button>
+           )}
+           {onSaveTemplate && (
+             <button
+               type="button"
+               className="generated-hero-download"
+               onClick={() => {
+                 const name = window.prompt("请输入模板名称（保存本次的选项配置）：");
+                 if (name?.trim()) {
+                   onSaveTemplate(name.trim(), draft.generatedImageUrl);
+                   onSound?.("success");
+                 }
+               }}
+               title="保存当前配置为模板，下次可快速应用"
+             >
+               <Save size={16} />
+               <span>保存选项</span>
+             </button>
+           )}
+         </div>
       </header>
 
       {hasImage ? (

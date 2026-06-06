@@ -1,0 +1,303 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                   EXIF 项目字段分析 - 执行总结                                   ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+📋 分析范围
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+7 个核心字段的完整实现分析：
+  1. scene (场景)           - 单选
+  2. narrator (叙述方式)     - 单选
+  3. palette (色调)          - 单选 ✓ 顶层
+  4. paperTexture (底图纸张)  - 单选 ✓ 顶层
+  5. mainColor (画面主色调)   - 单选 ✓ 顶层
+  6. style (风格)            - 单选
+  7. template (模板)         - 单选
+
+
+📍 UI 布局结构（InfoModal 内）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─ 生成模型 (L1602) ─────────────────────────────────────────┐
+│ 选择要使用的 AI 模型                                          │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─ 主要对话流 (L1652-1740) ──────────────────────────────────┐
+│                                                              │
+│  标题输入框                                                  │
+│                                                              │
+│  【场景】← SCENE                                            │
+│   ┌─ 一次旅程  □  城市散步  □  周末日常  □  朋友聚会       │
+│   └─ 独处片刻  □  纪念日    □                              │
+│                                                              │
+│  【场景细节】(动态，基于选中的场景)                         │
+│   ┌─ 目的地、行程、同行人、交通方式、天气 等                │
+│   └─ 支持自定义选项 ✅                                     │
+│                                                              │
+│  【情绪】(多选)                                             │
+│   ┌─ 可编辑标签 + 自定义 ✅                                │
+│   └─ 存储在 answers.customTags.mood                        │
+│                                                              │
+│  【叙述方式】← NARRATOR                                    │
+│   ┌─ 写给未来自己的信  □  像旅行档案一样整理  □ 等         │
+│   └─ 4 个预设选项                                          │
+│                                                              │
+│  【倾诉记录】(可选文本区)                                    │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─ 视觉风味面板 (L2236-2363) ✅ 【关键】────────────────────┐
+│                                                              │
+│  【色调】(单选) ← PALETTE ✓ 顶层                            │
+│   暖色胶片 □  冷色清透 □  马卡龙柔色 □  深夜墨蓝 □          │
+│   大地复古 □  高反差强对比 □                                │
+│   ❌ 目前不支持自定义                                       │
+│   📝 需要添加自定义输入                                     │
+│                                                              │
+│  【氛围】(多选) ← vibes                                     │
+│   可编辑标签 + 自定义 ✅                                    │
+│                                                              │
+│  【排版形状】(多选) ← layoutShapes                          │
+│   可编辑标签 + 自定义 ✅                                    │
+│                                                              │
+│  【照片边缘风格】(多选) ← edgeStyles                        │
+│   可编辑标签 + 自定义 ✅                                    │
+│                                                              │
+│  【装饰元素】(多选) ← decorations                           │
+│   可编辑标签 + 自定义 ✅                                    │
+│                                                              │
+│  【底图纸张】(单选) ← PAPEREXTURE ✓ 顶层                   │
+│   米色道林纸 □  宣纸 □  牛皮纸 □  淡蓝网格 □               │
+│   拍立得相纸 □  深蓝夜纸 □  水彩纹理 □                      │
+│   ❌ 目前不支持自定义                                       │
+│   📝 需要添加自定义输入                                     │
+│                                                              │
+│  【画面主色调】(单选) ← MAINCOLOR ✓ 顶层                   │
+│   樱花粉 ◉  天空蓝 ◉  薄荷绿 ◉  ... (10 个颜色)           │
+│   ❌ 目前不支持自定义                                       │
+│   📝 可考虑添加颜色选择器                                   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─ 风格 + 模板 (L1752-1802) ─────────────────────────────────┐
+│                                                              │
+│  【风格】← STYLE                                            │
+│   自动推荐 □  优雅纸本 □  复古繁盛 □  旅行档案 □           │
+│   可爱治愈 □ (5 个预设)                                     │
+│   ❌ 不支持自定义                                           │
+│                                                              │
+│  【模板】← TEMPLATE                                         │
+│   图文手帐 □  繁复拼贴 □  杂志跨页 □  旅行档案 □           │
+│   (4 个预设)                                                │
+│   ❌ 不支持自定义                                           │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─ 图片 + VLM 识图 (L1804-1860) ─────────────────────────────┐
+└─────────────────────────────────────────────────────────────┘
+
+
+🎯 当前实现现状
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌──────────────────┬──────────┬────────────┬─────────────────┐
+│ 字段名           │ 位置     │ 类型       │ 自定义支持      │
+├──────────────────┼──────────┼────────────┼─────────────────┤
+│ scene            │ dialogue │ 单选       │ ❌ 无           │
+│ narrator         │ dialogue │ 单选       │ ❌ 无 (P2)      │
+│ palette ✓        │ flavor   │ 单选       │ ❌ 无 (P1)      │
+│ paperTexture ✓   │ flavor   │ 单选       │ ❌ 无 (P1)      │
+│ mainColor ✓      │ flavor   │ 单选       │ ❌ 无 (P2)      │
+│ style            │ control  │ 单选       │ ❌ 无 (P3)      │
+│ template         │ control  │ 单选       │ ❌ 无 (P3)      │
+│                  │          │            │                 │
+│ mood (辅助)      │ dialogue │ 多选       │ ✅ 有           │
+│ vibes            │ flavor   │ 多选       │ ✅ 有           │
+│ layoutShapes     │ flavor   │ 多选       │ ✅ 有           │
+│ edgeStyles       │ flavor   │ 多选       │ ✅ 有           │
+│ decorations      │ flavor   │ 多选       │ ✅ 有           │
+└──────────────────┴──────────┴────────────┴─────────────────┘
+
+✓ = 顶层字段
+P1 = 优先级 1 (应立即实现)
+P2 = 优先级 2 (后续可扩展)
+P3 = 优先级 3 (难度高，待评估)
+
+
+💾 存储架构
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+UserAnswers 结构：
+
+  ├─ 基础字段
+  │  ├─ scene: string
+  │  ├─ narrator: string
+  │  └─ titleSeed: string
+  │
+  ├─ 颜色/纹理字段 (可选)
+  │  ├─ palette?: string
+  │  ├─ paperTexture?: string
+  │  └─ mainColor?: string
+  │
+  ├─ 多选数组
+  │  ├─ mood: string[]
+  │  ├─ vibes: string[]
+  │  ├─ layoutShapes: string[]
+  │  ├─ edgeStyles: string[]
+  │  └─ decorations: string[]
+  │
+  ├─ 自定义存储 ✅ 已实现
+  │  └─ customTags?: Record<string, string[]>
+  │     ├─ customTags.mood
+  │     ├─ customTags.vibes
+  │     ├─ customTags.layoutShapes
+  │     ├─ customTags.edgeStyles
+  │     ├─ customTags.decorations
+  │     └─ customTags.sceneName (场景动态字段)
+  │
+  └─ 场景相关
+     ├─ details?: Record<string, string>
+     │  └─ 存储场景补充字段 (目的地、天气等)
+     └─ (动态字段对应的自定义选项)
+
+
+🔧 关键代码位置
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+类型定义：
+  /src/types.ts
+    L10    scene: string
+    L12    narrator: string
+    L23    palette?: string
+    L25    mainColor?: string
+    L40    paperTexture?: string
+    L51    customTags?: Record<string, string[]>
+
+预设数据：
+  /src/data/presets.ts
+    L54-215   sceneOptions (6 个场景 + 字段定义)
+    L222-227  narratorOptions (4 个)
+    L234-241  paletteOptions (6 个)
+    L244-255  mainColorOptions (10 个，带颜色)
+    L328-336  paperOptions (7 个)
+
+UI 组件：
+  /src/App.tsx
+    L1277-1885     InfoModal 完整实现
+    L1663-1674     SCENE 选择
+    L1689-1700     NARRATOR 选择
+    L1752-1776     STYLE 选择
+    L1778-1802     TEMPLATE 选择
+    L2214-2363     VisualFlavorPanel (PALETTE/PAPEREXTURE/MAINCOLOR)
+    L2247-2263       └─ 色调 (PALETTE)
+    L2309-2325       └─ 纸张 (PAPEREXTURE)
+    L2327-2360       └─ 主色调 (MAINCOLOR)
+
+模型客户端：
+  /src/lib/modelClient.ts
+    L405-501      buildVisualFlavorPhrase (合并预设和自定义)
+    L546-642      buildKratosPrompt (主 prompt 构造)
+
+已有的自定义组件：
+  /src/components/EditableTagGroup.tsx
+    ├─ 预设标签显示
+    ├─ 已选标签高亮
+    └─ "添加自定义" 输入框
+
+  /src/hooks/useSceneDetailCustomOptions.ts
+    └─ 场景字段的自定义选项管理
+
+
+✨ 关键发现
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 三个"顶层"字段都在 VisualFlavorPanel 中
+   • palette (色调) - 影响整体色彩基调
+   • paperTexture (纸张) - 影响底层纹理
+   • mainColor (主色调) - 影响背景色彩 (UI only, 但实际已加入 prompt)
+
+2. 自定义选项架构已完备
+   ✅ customTags 存储结构已定义
+   ✅ EditableTagGroup 组件已实现
+   ✅ 5 个多选字段已支持自定义
+   ⚠️  仅需复用这套机制到单选字段 (palette, paperTexture 等)
+
+3. 优先级明确
+   P1: palette, paperTexture  (视觉风味核心，应立即实现)
+   P2: mainColor, narrator    (后续扩展)
+   P3: scene, style, template (难度高或不必要)
+
+4. 文档与实现不同步
+   • types.ts 说 mainColor "仅用于 UI 展示"
+   • 实际 modelClient.ts 已将其加入 prompt (L495-496)
+   • 需要澄清设计意图
+
+5. 状态管理分离
+   • style, template: 独立 state (styleId, templateId)
+   • 其他: 都在 answers 中
+   • 建议：如要支持自定义，需调整架构
+
+
+📊 自定义选项实现路线图
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【立即实现】(Sprint 1)
+├─ palette (色调)
+│  ├─ /src/App.tsx L2247-2263 修改 FlavorGroup 段落
+│  ├─ 添加 EditableTagGroup 或类似组件
+│  ├─ 存储到 answers.customTags?.palette
+│  └─ /src/lib/modelClient.ts L409 合并预设和自定义
+│
+└─ paperTexture (纸张)
+   ├─ /src/App.tsx L2309-2325 修改 FlavorGroup 段落
+   ├─ 添加 EditableTagGroup 或类似组件
+   ├─ 存储到 answers.customTags?.paperTexture
+   └─ /src/lib/modelClient.ts L491 合并预设和自定义
+
+【后续可实现】(Sprint 2)
+├─ mainColor (主色调)
+│  ├─ 方案 A: 颜色选择器 (hex input 或 color picker)
+│  ├─ 方案 B: 自定义颜色名称
+│  └─ 注意：澄清是否应加入 prompt
+│
+└─ narrator (叙述方式)
+   ├─ /src/App.tsx L1689-1700
+   ├─ 在 4 个选项后添加"自定义…"输入框
+   └─ 存储到 answers.customTags?.narrator
+
+【评估阶段】(Sprint 3)
+├─ scene (场景)
+│  └─ 难点：新增场景需关联动态补充字段
+│
+└─ style, template
+   └─ 通常为系统预设，建议保持固定
+
+
+📝 输出物
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ 已生成：
+
+1. FIELD_ANALYSIS.md (完整分析文档)
+   └─ 7 个字段的详细实现分析
+   └─ UI 布局图
+   └─ 自定义选项现状
+   └─ 实现路线图
+   └─ 代码速查表
+
+2. 本总结 (this file)
+   └─ 可视化布局
+   └─ 表格总结
+   └─ 实现路线图
+   └─ 关键发现
+
+
+🎬 后续建议
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 优先实现 palette 和 paperTexture 的自定义选项
+2. 澄清 mainColor 的设计意图（仅 UI or 也影响 prompt?）
+3. 考虑为 narrator 添加自定义输入
+4. 保持 scene, style, template 的固定预设
+5. 文档同步：types.ts L24 的注释需更新
+

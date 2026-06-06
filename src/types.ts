@@ -123,6 +123,40 @@ export type JournalDraft = {
    answers: UserAnswers;
    styleId: StyleId;
    templateId: TemplateId;
-   /** 模板的封面图（保存时的成图 URL） */
-   coverImageUrl?: string;
- };
+  /** 模板的封面图（保存时的成图 URL） */
+    coverImageUrl?: string;
+  };
+
+  /** 手帐页面（收藏在手帐本中的生成结果） */
+  export type JournalPageEntry = {
+    id: string;
+    /** 所属手帐本 ID */
+    notebookId: string;
+    /** 所属用户 ID */
+    userId: string;
+    /** 生成的手帐图片 URL（COS 链接） */
+    imageUrl: string;
+    /** 页面标题（从 JournalDraft.title 复制） */
+    title: string;
+    /** 页面排序序号（0-based） */
+    order: number;
+    /** 创建时间戳（毫秒） */
+    createdAt: number;
+  };
+
+  /** 手帐本（展示架上的一本手帐） */
+  export type JournalNotebook = {
+    id: string;
+    /** 所属用户 ID */
+    userId: string;
+    /** 手帐本名称 */
+    name: string;
+    /** 手帐本封面图 URL（COS 链接） */
+    coverImageUrl: string;
+    /** 手帐本中页面的数量 */
+    pageCount: number;
+    /** 创建时间戳（毫秒） */
+    createdAt: number;
+    /** 最后修改时间戳（毫秒） */
+    updatedAt: number;
+  };

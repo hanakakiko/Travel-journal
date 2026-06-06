@@ -9,6 +9,7 @@ interface UsernameSignUpProps {
 export function UsernameSignUp({ onSignUpSuccess }: UsernameSignUpProps) {
   const { signUpWithUsername } = useAuth();
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [nickname, setNickname] = useState('');
@@ -40,6 +41,17 @@ export function UsernameSignUp({ onSignUpSuccess }: UsernameSignUpProps) {
     // 用户名只能包含字母、数字和下划线
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       setError('用户名只能包含字母、数字和下划线');
+      return false;
+    }
+
+    if (!email.trim()) {
+      setError('请输入邮箱地址');
+      return false;
+    }
+
+    // 邮箱格式验证
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('请输入有效的邮箱地址');
       return false;
     }
 
@@ -76,6 +88,7 @@ export function UsernameSignUp({ onSignUpSuccess }: UsernameSignUpProps) {
       const { error: signUpError } = await signUpWithUsername(
         username,
         password,
+        email,
         nickname || undefined
       );
 
@@ -134,46 +147,77 @@ export function UsernameSignUp({ onSignUpSuccess }: UsernameSignUpProps) {
        )}
 
        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-         {/* 用户名 */}
-         <div>
-           <label style={{
-             display: 'block',
-             fontSize: '14px',
-             fontWeight: 900,
-             color: 'var(--ink)',
-             marginBottom: '8px',
-           }}>
-             用户名 <span style={{ color: '#ff4444' }}>*</span>
-           </label>
-           <input
-             type="text"
-             value={username}
-             onChange={(e) => setUsername(e.target.value)}
-             placeholder="3-20 个字符，支持字母、数字和下划线"
-             style={{
-               width: '100%',
-               padding: '10px 12px',
-               border: '2px solid var(--ink)',
-               borderRadius: '14px',
-               background: '#fffcf7',
-               fontSize: '16px',
-               fontFamily: 'inherit',
-               color: 'var(--ink)',
-               boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
-             }}
-             disabled={isLoading}
-             maxLength={20}
-           />
-           <p style={{
-             fontSize: '12px',
-             color: 'var(--muted)',
-             margin: '6px 0 0 0',
-           }}>
-             {username.length > 0 ? `${username.length}/20` : ''}
-           </p>
-         </div>
+          {/* 用户名 */}
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 900,
+              color: 'var(--ink)',
+              marginBottom: '8px',
+            }}>
+              用户名 <span style={{ color: '#ff4444' }}>*</span>
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="3-20 个字符，支持字母、数字和下划线"
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: '2px solid var(--ink)',
+                borderRadius: '14px',
+                background: '#fffcf7',
+                fontSize: '16px',
+                fontFamily: 'inherit',
+                color: 'var(--ink)',
+                boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+              }}
+              disabled={isLoading}
+              maxLength={20}
+            />
+            <p style={{
+              fontSize: '12px',
+              color: 'var(--muted)',
+              margin: '6px 0 0 0',
+            }}>
+              {username.length > 0 ? `${username.length}/20` : ''}
+            </p>
+          </div>
 
-         {/* 密码 */}
+          {/* 邮箱 */}
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: 900,
+              color: 'var(--ink)',
+              marginBottom: '8px',
+            }}>
+              邮箱地址 <span style={{ color: '#ff4444' }}>*</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="输入您的邮箱地址"
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: '2px solid var(--ink)',
+                borderRadius: '14px',
+                background: '#fffcf7',
+                fontSize: '16px',
+                fontFamily: 'inherit',
+                color: 'var(--ink)',
+                boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.07)',
+              }}
+              disabled={isLoading}
+            />
+          </div>
+
+          {/* 密码 */}
          <div>
            <label style={{
              display: 'block',
@@ -321,30 +365,30 @@ export function UsernameSignUp({ onSignUpSuccess }: UsernameSignUpProps) {
            />
          </div>
 
-         {/* 注册按钮 */}
-         <button
-           onClick={handleSignUp}
-           disabled={isLoading || !username || !password || !confirmPassword}
-           style={{
-             width: '100%',
-             minHeight: '48px',
-             padding: '10px 16px',
-             marginTop: '8px',
-             background: isLoading || !username || !password || !confirmPassword ? '#dcd6cc' : 'var(--ink)',
-             color: isLoading || !username || !password || !confirmPassword ? 'rgba(38, 29, 26, 0.54)' : '#fff7eb',
-             border: '2px solid var(--ink)',
-             borderRadius: '999px',
-             fontWeight: 900,
-             fontSize: '16px',
-             cursor: isLoading || !username || !password || !confirmPassword ? 'not-allowed' : 'pointer',
-             display: 'flex',
-             alignItems: 'center',
-             justifyContent: 'center',
-             gap: '8px',
-             transition: 'all 0.2s ease',
-             boxShadow: isLoading || !username || !password || !confirmPassword ? 'none' : '5px 6px 0 rgba(38, 29, 26, 0.1)',
-           }}
-         >
+          {/* 注册按钮 */}
+          <button
+            onClick={handleSignUp}
+            disabled={isLoading || !username || !email || !password || !confirmPassword}
+            style={{
+              width: '100%',
+              minHeight: '48px',
+              padding: '10px 16px',
+              marginTop: '8px',
+              background: isLoading || !username || !email || !password || !confirmPassword ? '#dcd6cc' : 'var(--ink)',
+              color: isLoading || !username || !email || !password || !confirmPassword ? 'rgba(38, 29, 26, 0.54)' : '#fff7eb',
+              border: '2px solid var(--ink)',
+              borderRadius: '999px',
+              fontWeight: 900,
+              fontSize: '16px',
+              cursor: isLoading || !username || !email || !password || !confirmPassword ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease',
+              boxShadow: isLoading || !username || !email || !password || !confirmPassword ? 'none' : '5px 6px 0 rgba(38, 29, 26, 0.1)',
+            }}
+          >
            {isLoading ? (
              <>
                <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
