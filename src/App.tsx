@@ -4,6 +4,7 @@ import {
   Check,
   CircleX,
   Eye,
+  Heart,
   ImagePlus,
   ImageDown,
   Layers3,
@@ -11,6 +12,7 @@ import {
   Loader2,
   LogOut,
   Palette,
+  QrCode,
   Save,
   Sparkles,
   Tag,
@@ -87,6 +89,7 @@ const splitMulti = (raw: string | undefined): string[] =>
 const joinMulti = (arr: string[]): string => arr.filter(Boolean).join(MULTI_SEP);
 
 const classNames = (...items: Array<string | false | undefined>) => items.filter(Boolean).join(" ");
+const REWARD_QR_CODE_SRC = "/wechat-reward-code.png";
 
 const downloadDataUrl = (dataUrl: string, filename: string) => {
   const link = document.createElement("a");
@@ -308,6 +311,7 @@ function AppContent({
   // 手帐本功能相关状态
   const [showNotebookShelf, setShowNotebookShelf] = useState(false);
   const [showSaveToNotebook, setShowSaveToNotebook] = useState(false);
+  const [showRewardDownload, setShowRewardDownload] = useState(false);
 
   const activeStyle = draft?.styleId ?? (styleId === "auto" ? "elegant" : styleId);
   const play = (effect: SoundEffect) => playSound(effect, soundEnabled);
@@ -382,9 +386,9 @@ function AppContent({
   }, []);
 
   useEffect(() => {
-    document.body.classList.toggle("modal-open", isInfoOpen || isPhotoManagerOpen);
+    document.body.classList.toggle("modal-open", isInfoOpen || isPhotoManagerOpen || showRewardDownload);
     return () => document.body.classList.remove("modal-open");
-  }, [isInfoOpen, isPhotoManagerOpen]);
+  }, [isInfoOpen, isPhotoManagerOpen, showRewardDownload]);
 
   useEffect(() => {
     if (!isInfoOpen) return;
@@ -757,7 +761,7 @@ function AppContent({
     });
   };
 
-  const downloadGeneratedImage = async () => {
+  const performGeneratedImageDownload = async () => {
     if (!draft?.generatedImageUrl) return;
     play("export");
     try {
@@ -770,6 +774,17 @@ function AppContent({
       // 跨域下载失败时退化为新窗口打开。
       window.open(draft.generatedImageUrl, "_blank", "noopener,noreferrer");
     }
+  };
+
+  const requestGeneratedImageDownload = () => {
+    if (!draft?.generatedImageUrl) return;
+    play("open");
+    setShowRewardDownload(true);
+  };
+
+  const continueGeneratedImageDownload = () => {
+    setShowRewardDownload(false);
+    void performGeneratedImageDownload();
   };
 
   return (
@@ -1118,12 +1133,23 @@ function AppContent({
            <GeneratedShowcase
              draft={draft}
              answers={answers}
-             onDownload={downloadGeneratedImage}
+             onDownload={requestGeneratedImageDownload}
              onSaveTemplate={handleSaveTemplate}
              onSaveToNotebook={() => setShowSaveToNotebook(true)}
              onSound={play}
            />
         </section>
+      )}
+
+      {showRewardDownload && draft?.generatedImageUrl && (
+        <RewardDownloadModal
+          onClose={() => {
+            play("paper");
+            setShowRewardDownload(false);
+          }}
+          onProceed={continueGeneratedImageDownload}
+          onSound={play}
+        />
       )}
 
       {/* 等待 LLM 接口时的全屏「手绘中」遮罩：兔子跳动 + 选中图片轮播，缓解等待焦虑 */}
@@ -1338,6 +1364,71 @@ function GeneratedShowcase({
         </div>
       )}
     </section>
+  );
+}
+
+function RewardDownloadModal({
+  onClose,
+  onProceed,
+  onSound,
+}: {
+  onClose: () => void;
+  onProceed: () => void;
+  onSound?: (effect: SoundEffect) => void;
+}) {
+  const [hasQrCode, setHasQrCode] = useState(true);
+
+  const proceed = () => {
+    onSound?.("tap");
+    onProceed();
+  };
+
+  return (
+    <div className="modal-layer reward-modal-layer" role="dialog" aria-modal="true" aria-labelledby="reward-title">
+      <button className="modal-backdrop" type="button" aria-label="关闭赞赏弹窗" onClick={onClose} />
+      <section className="reward-modal">
+        <button className="icon-button reward-close" type="button" aria-label="关闭" onClick={onClose}>
+          <X size={18} />
+        </button>
+
+        <div className="reward-mark" aria-hidden="true">
+          <Heart size={28} />
+        </div>
+
+        <header className="reward-header">
+          <p>图片下载前的小请求</p>
+          <h2 id="reward-title">满意的话，可以打赏一下</h2>
+          <small>喜欢这张手帐图的话，扫一下微信码支持继续创作。</small>
+        </header>
+
+        <div className="reward-code-frame">
+          {hasQrCode ? (
+            <img
+              src={REWARD_QR_CODE_SRC}
+              alt="微信打赏收款码"
+              onError={() => setHasQrCode(false)}
+            />
+          ) : (
+            <div className="reward-code-placeholder">
+              <QrCode size={54} />
+              <strong>微信收款码待放入</strong>
+              <span>public/wechat-reward-code.png</span>
+            </div>
+          )}
+        </div>
+
+        <div className="reward-actions">
+          <button className="reward-primary" type="button" onClick={proceed}>
+            <Heart size={17} />
+            <span>我已打赏，下载图片</span>
+          </button>
+          <button className="reward-secondary" type="button" onClick={proceed}>
+            <ImageDown size={17} />
+            <span>狠心拒绝，直接下载</span>
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 

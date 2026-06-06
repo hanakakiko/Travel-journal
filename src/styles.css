@@ -3024,6 +3024,188 @@ label:focus-within {
   word-break: break-word;
 }
 
+.reward-modal-layer {
+  z-index: 46;
+}
+
+.reward-modal {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 16px;
+  width: min(100%, 390px);
+  max-height: min(86vh, 680px);
+  padding: 24px 20px 20px;
+  overflow-y: auto;
+  border: 2px solid var(--ink);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 18% 13%, rgba(189, 232, 228, 0.58), transparent 32%),
+    linear-gradient(180deg, #fff8d0, #fffdf4 58%),
+    #fffdf4;
+  box-shadow:
+    7px 9px 0 rgba(38, 29, 26, 0.16),
+    0 28px 70px rgba(18, 14, 12, 0.34);
+  animation: modalPop 0.32s cubic-bezier(0.18, 1.05, 0.24, 1) both;
+}
+
+.reward-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  width: 38px;
+}
+
+.reward-mark {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: 62px;
+  aspect-ratio: 1;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: #f7cfd8;
+  color: var(--ink);
+  box-shadow: 4px 5px 0 rgba(38, 29, 26, 0.12);
+}
+
+.reward-mark svg {
+  fill: rgba(23, 18, 15, 0.1);
+  stroke-width: 3;
+}
+
+.reward-header {
+  display: grid;
+  gap: 6px;
+  padding: 0 28px;
+  text-align: center;
+}
+
+.reward-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.reward-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(24px, 7vw, 31px);
+  font-weight: 950;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.reward-header small {
+  color: rgba(23, 18, 15, 0.66);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.reward-code-frame {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: min(100%, 252px);
+  aspect-ratio: 1;
+  padding: 12px;
+  border: 2px solid var(--ink);
+  border-radius: 20px;
+  background:
+    linear-gradient(90deg, rgba(38, 29, 26, 0.05) 0 1px, transparent 1px),
+    linear-gradient(180deg, #fffcf7, #fffdf4);
+  background-size: 16px 16px, auto;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.reward-code-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  object-fit: contain;
+}
+
+.reward-code-placeholder {
+  display: grid;
+  gap: 8px;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 18px;
+  border: 2px dashed rgba(23, 18, 15, 0.28);
+  border-radius: 14px;
+  color: rgba(23, 18, 15, 0.62);
+  text-align: center;
+}
+
+.reward-code-placeholder svg {
+  stroke-width: 2.4;
+}
+
+.reward-code-placeholder strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.reward-code-placeholder span {
+  color: rgba(23, 18, 15, 0.58);
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.reward-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.reward-primary,
+.reward-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 50px;
+  padding: 10px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 950;
+  white-space: normal;
+  box-shadow: 4px 5px 0 rgba(38, 29, 26, 0.12);
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.14s ease,
+    background 0.14s ease;
+}
+
+.reward-primary {
+  background: #ffcf38;
+}
+
+.reward-secondary {
+  background: #fffcf7;
+}
+
+.reward-primary:hover,
+.reward-secondary:hover {
+  transform: translateY(-1px);
+  box-shadow: 5px 6px 0 rgba(38, 29, 26, 0.14);
+}
+
+.reward-primary:active,
+.reward-secondary:active {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 rgba(38, 29, 26, 0.18);
+}
+
 /* 当封面/章节页改成生成大图时，让 page-photos 区域整体充满。 */
 .page-photos.generated {
   display: block;
