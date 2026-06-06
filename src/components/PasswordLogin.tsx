@@ -4,9 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface PasswordLoginProps {
   onSignUpClick?: () => void;
+  onLoginSuccess?: () => void;
 }
 
-export function PasswordLogin({ onSignUpClick }: PasswordLoginProps) {
+export function PasswordLogin({ onSignUpClick, onLoginSuccess }: PasswordLoginProps) {
   const { signInWithPassword } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -37,14 +38,16 @@ export function PasswordLogin({ onSignUpClick }: PasswordLoginProps) {
       }
 
       setError(null);
+      console.log('[Login] success, calling onLoginSuccess');
       // 登录成功，清空表单
       setUsername('');
       setPassword('');
 
-      // 可选：在此处导航到主页或其他页面
-      setTimeout(() => {
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      } else {
         window.location.href = '/';
-      }, 500);
+      }
     } finally {
       setIsLoading(false);
     }

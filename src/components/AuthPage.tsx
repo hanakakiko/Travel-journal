@@ -43,13 +43,13 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
         </div>
 
         {/* 内容区域 */}
-        <div>
-          {mode === 'login' ? (
-            <PasswordLogin />
-          ) : (
-            <EmailSignUp />
-          )}
-        </div>
+         <div>
+           {mode === 'login' ? (
+             <PasswordLogin onSignUpClick={() => setMode('signup')} onLoginSuccess={onAuthSuccess} />
+           ) : (
+             <EmailSignUp onSignUpSuccess={onAuthSuccess} />
+           )}
+         </div>
 
         {/* 页脚 */}
         <div className="mt-8 text-center text-sm text-gray-600">

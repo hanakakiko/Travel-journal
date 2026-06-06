@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { Mail, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-export function EmailSignUp() {
+interface EmailSignUpProps {
+  onSignUpSuccess?: () => void;
+}
+
+export function EmailSignUp({ onSignUpSuccess }: EmailSignUpProps) {
   const { sendSignUpCode, verifySignUpCode } = useAuth();
   const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
@@ -88,10 +92,13 @@ export function EmailSignUp() {
         return;
       }
 
-      setSuccess('注册成功！3秒后自动跳转...');
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 3000);
+      console.log('[SignUp] success, calling onSignUpSuccess');
+      setSuccess('注册成功！请登录您的账号');
+      if (onSignUpSuccess) {
+        onSignUpSuccess();
+      } else {
+        setTimeout(() => { window.location.href = '/'; }, 2000);
+      }
     } finally {
       setIsLoading(false);
     }

@@ -84,16 +84,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const auth = app.auth({ persistence: 'local' });
       
       const { data } = await auth.getSession();
+      console.log('[Auth] checkAuthStatus getSession result:', JSON.stringify(data));
       
       if (data?.session) {
+        console.log('[Auth] session found, user:', data.session.user?.id, data.session.user?.email);
         setSession(data.session);
         setUser(data.session.user);
       } else {
+        console.log('[Auth] no session found');
         setSession(null);
         setUser(null);
       }
     } catch (error) {
-      console.error('检查认证状态失败:', error);
+      console.error('[Auth] checkAuthStatus failed:', error);
       setSession(null);
       setUser(null);
     } finally {
@@ -188,7 +191,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ? { email: identifier, password }
         : { username: identifier, password };
 
+      console.log('[Auth] signInWithPassword, using', identifier.includes('@') ? 'email' : 'username');
       const { data, error } = await auth.signInWithPassword(credentials);
+      console.log('[Auth] signInWithPassword result - data:', JSON.stringify(data), 'error:', JSON.stringify(error));
 
       if (error) {
         return { error: { message: error.message || '用户名或密码错误，请重试' } };
@@ -196,8 +201,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // 更新用户状态
       if (data?.session) {
+        console.log('[Auth] login success, session user:', data.session.user?.id, data.session.user?.email);
         setSession(data.session);
         setUser(data.session.user);
+      } else {
+        console.warn('[Auth] login returned no error but also no session:', JSON.stringify(data));
       }
 
       return { data };
