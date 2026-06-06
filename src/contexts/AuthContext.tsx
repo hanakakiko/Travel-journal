@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import cloudbase from '@cloudbase/js-sdk';
 
 // 环境变量 - 根据你的实际环境修改
@@ -66,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const verifyOtpFunctionRef = useRef<any>(null);
 
   // 初始化时检查登录状态
   useEffect(() => {
@@ -114,7 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { error };
         }
 
-        // 返回 verifyOtp 函数供后续使用
+        // 保存 verifyOtp 函数供后续使用
+        verifyOtpFunctionRef.current = data?.verifyOtp;
+
         return { 
           data: {
             verifyOtp: data?.verifyOtp,
@@ -123,34 +126,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      // 如果提供了验证码，则完成注册
-      const signUpParams: any = {
-        email,
-        password,
-      };
-      
-      // 可选参数
-      if (nickname) {
-        signUpParams.name = nickname;
+      // 如果提供了验证码，则使用保存的 verifyOtp 函数进行验证
+      if (!verifyOtpFunctionRef.current) {
+        return { 
+          error: {
+            message: '验证码已过期，请重新发送'
+          }
+        };
       }
 
-      const { data, error } = await auth.signUp(signUpParams);
-
-      if (error) {
-        return { error };
-      }
-
-      // 验证码验证（如果 API 需要额外的验证步骤）
-      if (data?.verifyOtp) {
-        const verifyResult = await data.verifyOtp({ token: verificationCode });
+      try {
+        // 使用保存的 verifyOtp 函数验证码，这会完成注册
+        const verifyResult = await verifyOtpFunctionRef.current({ 
+          token: verificationCode,
+          password,
+          name: nickname || undefined
+        });
+        
         if (verifyResult?.error) {
           return { error: verifyResult.error };
         }
-      }
 
-      // 更新用户状态
-      await checkAuthStatus();
-      return { data };
+        // 清除保存的 verifyOtp 函数
+        verifyOtpFunctionRef.current = null;
+
+        // 更新用户状态
+        await checkAuthStatus();
+        return { data: verifyResult?.data };
+      } catch (verifyError: any) {
+        return {
+          error: {
+            message: verifyError?.message || '验证码验证失败'
+          }
+        };
+      }
     } catch (error: any) {
       return { 
         error: {
