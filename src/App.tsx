@@ -1555,26 +1555,26 @@ function InfoModal({
              <button className="secondary-action" type="button" onClick={onClose}>
                关闭
              </button>
-             <button
-               className="primary-action"
-               type="button"
-               onClick={() => {
-                 onSound("tap");
-                 setShowTemplateSelection(false);
-               }}
-               style={{ flex: 1 }}
-             >
-               <Brush size={19} />
-               <span>从头开始</span>
-             </button>
-           </footer>
-         </section>
-       </div>
-     );
-   }
+              <button
+                className="primary-action"
+                type="button"
+                onClick={() => {
+                  onSound("tap");
+                  setShowTemplateSelection(false);
+                }}
+                style={{ flex: 1 }}
+              >
+                <Brush size={19} />
+                <span>{photos.length > 0 ? "从草稿开始" : "从头开始"}</span>
+              </button>
+            </footer>
+          </section>
+        </div>
+      );
+    }
 
-   return (
-     <div className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="journal-modal-title">
+    return (
+      <div className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="journal-modal-title">
        <button className="modal-backdrop" type="button" aria-label="关闭补充信息" onClick={onClose} />
        <section className="info-modal">
          <div className="modal-handle" />
