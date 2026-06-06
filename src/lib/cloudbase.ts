@@ -8,6 +8,7 @@
 import cloudbase from "@cloudbase/js-sdk";
 
 const ENV_ID = "my-travel-journal-d5d06m1a517f14";
+const REGION = "ap-shanghai";
 
 // ── 单例 App 实例 ─────────────────────────────────────────────────────────────
 
@@ -15,7 +16,11 @@ let _app: ReturnType<typeof cloudbase.init> | null = null;
 
 export function getApp() {
   if (!_app) {
-    _app = cloudbase.init({ env: ENV_ID });
+    _app = cloudbase.init({ 
+      env: ENV_ID,
+      region: REGION,
+      auth: { detectSessionInUrl: true },
+    });
   }
   return _app;
 }
@@ -28,7 +33,7 @@ export function getApp() {
  */
 export async function ensureAnonymousLogin(): Promise<void> {
   const app = getApp();
-  const auth = app.auth();
+  const auth = app.auth({ persistence: 'local' });
 
   // 检查是否已有登录态
   const loginState = await auth.getLoginState();
@@ -36,7 +41,7 @@ export async function ensureAnonymousLogin(): Promise<void> {
 
   // 发起匿名登录
   const result = await auth.signInAnonymously();
-  if (result.error) {
+  if (result?.error) {
     throw new Error(`匿名登录失败: ${JSON.stringify(result.error)}`);
   }
 }
@@ -47,11 +52,30 @@ export async function ensureAnonymousLogin(): Promise<void> {
  */
 export async function getCurrentUserId(): Promise<string | null> {
   const app = getApp();
-  const user = await app.auth().getCurrentUser();
-  return user?.uid ?? null;
+  const auth = app.auth({ persistence: 'local' });
+  try {
+    const user = await auth.getCurrentUser();
+    return user?.uid ?? null;
+  } catch {
+    return null;
+  }
 }
 
-// ── 数据库快捷访问 ───────────────────────────────────────────────────────────
+/**
+ * 获取当前用户的认证会话
+ */
+export async function getCurrentSession() {
+  const app = getApp();
+  const auth = app.auth({ persistence: 'local' });
+  try {
+    const { data } = await auth.getSession();
+    return data?.session ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ── 数据库快捷访问 ───────────────────────────────────────────────────────
 
 export function getDb() {
   return getApp().database();
