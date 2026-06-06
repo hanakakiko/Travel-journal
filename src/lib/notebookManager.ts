@@ -11,6 +11,24 @@ import type { JournalNotebook, JournalPageEntry } from "../types";
 const NOTEBOOKS_COLLECTION = "journals_notebooks";
 const PAGES_COLLECTION = "journals_pages";
 
+type StoredJournalPageEntry = JournalPageEntry & { _id?: string };
+type PageOrderUpdate = {
+  pageId: string;
+  order: number;
+  page?: StoredJournalPageEntry;
+};
+type PageCollection = {
+  doc: (id: string) => {
+    update: (data: object) => Promise<unknown>;
+  };
+  where: (query: object) => {
+    get: () => Promise<unknown>;
+    remove: () => Promise<unknown>;
+    update: (data: object) => Promise<unknown>;
+  };
+};
+type OperationResult = Record<string, unknown>;
+
 // ── 工具函数 ──────────────────────────────────────────────────────────────
 
 /**
@@ -19,31 +37,138 @@ const PAGES_COLLECTION = "journals_pages";
  * - code: "0" (字符串)
  * - code: 0 (数字)
  * - 没有 code 字段但有 data (某些查询操作)
+ * - count 操作返回 total
  * - add/update 操作返回 id（说明成功插入/更新）
- * - 有操作计数字段 insertedCount/modifiedCount/deletedCount > 0
+ * - set 操作返回 upsertId/upsertedId（说明成功插入）
+ * - 有操作计数字段 insertedCount/modifiedCount/deletedCount 或 inserted/updated/deleted > 0
  * 失败状态通常有 error 字段或 code 不为 0
  */
-function isSuccess(result: any): boolean {
+function isRecord(value: unknown): value is OperationResult {
+  return typeof value === "object" && value !== null;
+}
+
+function hasPositiveNumberField(result: OperationResult, field: string): boolean {
+  const value = result[field];
+
+  return typeof value === "number" && value > 0;
+}
+
+function hasNonEmptyStringField(result: OperationResult, field: string): boolean {
+  const value = result[field];
+
+  return typeof value === "string" && value.length > 0;
+}
+
+function hasNonEmptyArrayField(result: OperationResult, field: string): boolean {
+  const value = result[field];
+
+  return Array.isArray(value) && value.length > 0;
+}
+
+function isSuccess(result: unknown): boolean {
+  if (!isRecord(result)) return false;
   // 如果有 error 字段，说明失败
-  if (result?.error) return false;
+  if (result.error) return false;
   // 如果 code 明确为 0，说明成功
-  if (result?.code === "0" || result?.code === 0) return true;
+  if (result.code === "0" || result.code === 0) return true;
   // 如果有 data 且没有 error，也认为是成功（某些查询操作）
-  if (result?.data !== undefined && !result?.error) return true;
+  if (result.data !== undefined && !result.error) return true;
   // add() 操作成功时应该返回 id（新插入记录的 ID）
-  if (result?.id) return true;
+  if (hasNonEmptyStringField(result, "id")) return true;
+  if (hasNonEmptyArrayField(result, "ids")) return true;
+  if (hasNonEmptyArrayField(result, "insertedIds")) return true;
+  if (
+    hasNonEmptyStringField(result, "upsertId") ||
+    hasNonEmptyStringField(result, "upsertedId")
+  ) {
+    return true;
+  }
+  if (result.total !== undefined && !result.error) return true;
   // 通过检查操作计数字段来判断 update/delete 操作是否成功
-  if (result?.insertedCount !== undefined) {
-    return result.insertedCount > 0;
+  if (result.insertedCount !== undefined) {
+    return hasPositiveNumberField(result, "insertedCount");
   }
-  if (result?.modifiedCount !== undefined) {
-    return result.modifiedCount > 0;
+  if (result.inserted !== undefined) {
+    return hasPositiveNumberField(result, "inserted");
   }
-  if (result?.deletedCount !== undefined) {
-    return result.deletedCount > 0;
+  if (result.modifiedCount !== undefined) {
+    return hasPositiveNumberField(result, "modifiedCount");
+  }
+  if (result.updated !== undefined) {
+    return hasPositiveNumberField(result, "updated");
+  }
+  if (result.deletedCount !== undefined) {
+    return hasPositiveNumberField(result, "deletedCount");
+  }
+  if (result.deleted !== undefined) {
+    return hasPositiveNumberField(result, "deleted");
   }
   // 默认认为失败
   return false;
+}
+
+function isWriteAccepted(result: unknown): boolean {
+  if (!isRecord(result)) return false;
+  if (result.error) return false;
+  if (result.code !== undefined && result.code !== "0" && result.code !== 0) return false;
+  if (hasNonEmptyStringField(result, "requestId")) return true;
+  return isSuccess(result);
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function toPages(result: unknown): StoredJournalPageEntry[] {
+  if (
+    isRecord(result) &&
+    "data" in result &&
+    Array.isArray(result.data)
+  ) {
+    return result.data as StoredJournalPageEntry[];
+  }
+
+  return [];
+}
+
+function sortPagesByOrder(pages: StoredJournalPageEntry[]): StoredJournalPageEntry[] {
+  return [...pages].sort((a, b) => {
+    const orderDiff = Number(a.order) - Number(b.order);
+
+    if (orderDiff !== 0) return orderDiff;
+
+    return Number(a.createdAt) - Number(b.createdAt);
+  });
+}
+
+async function applyPageOrderUpdates(
+  pagesCollection: PageCollection,
+  notebookId: string,
+  userId: string,
+  updates: PageOrderUpdate[]
+): Promise<void> {
+  for (const { pageId, order, page } of updates) {
+    const query = page?._id
+      ? pagesCollection.doc(page._id)
+      : pagesCollection.where({ id: pageId, notebookId, userId });
+    const result = await query.update({ order });
+
+    if (!isWriteAccepted(result)) {
+      throw new Error(`调整页面顺序失败: ${getResultMessage(result)}`);
+    }
+  }
+}
+
+function getResultMessage(result: unknown): string {
+  if (
+    isRecord(result) &&
+    "message" in result &&
+    typeof result.message === "string"
+  ) {
+    return result.message;
+  }
+
+  return JSON.stringify(result);
 }
 
 // ── 手帐本操作 ────────────────────────────────────────────────────────────
@@ -359,14 +484,40 @@ export async function deletePage(pageId: string, notebookId: string): Promise<vo
   if (!userId) throw new Error("未能获取用户 ID");
 
   const db = getDb();
-  const result = await db
-    .collection(PAGES_COLLECTION)
+  const pagesCollection = db.collection(PAGES_COLLECTION) as PageCollection;
+  const pagesResult = await pagesCollection.where({ notebookId, userId }).get();
+
+  if (!isSuccess(pagesResult)) {
+    throw new Error(`获取当前页面顺序失败: ${getResultMessage(pagesResult)}`);
+  }
+
+  const existingPages = toPages(pagesResult);
+  const pageToDelete = existingPages.find((page) => page.id === pageId);
+
+  if (!pageToDelete) {
+    throw new Error("页面不存在或已删除");
+  }
+
+  const remainingPages = sortPagesByOrder(
+    existingPages.filter((page) => page.id !== pageId)
+  );
+
+  const result = await pagesCollection
     .where({ id: pageId, notebookId, userId })
     .remove();
 
-  if (!isSuccess(result)) {
-    throw new Error(`删除页面失败: ${result.message || JSON.stringify(result)}`);
+  if (!isWriteAccepted(result)) {
+    throw new Error(`删除页面失败: ${getResultMessage(result)}`);
   }
+
+  await applyPageOrderUpdates(
+    pagesCollection,
+    notebookId,
+    userId,
+    remainingPages
+      .map((page, order) => ({ pageId: page.id, order, page }))
+      .filter(({ page, order }) => Number(page.order) !== order)
+  );
 
   // 更新手帐本的 pageCount
   await updateNotebookPageCount(notebookId);
@@ -382,19 +533,52 @@ export async function reorderPages(notebookId: string, pageIds: string[]): Promi
   if (!userId) throw new Error("未能获取用户 ID");
 
   const db = getDb();
+  const pagesCollection = db.collection(PAGES_COLLECTION) as PageCollection;
+  const maxAttempts = 3;
 
-  // 批量更新每个页面的 order 值
-  for (let i = 0; i < pageIds.length; i++) {
-    const pageId = pageIds[i];
-    const result = await db
-      .collection(PAGES_COLLECTION)
-      .where({ id: pageId, notebookId, userId })
-      .update({ order: i });
+  const getCurrentPages = async () => {
+    const pagesResult = await pagesCollection.where({ notebookId, userId }).get();
 
-    if (!isSuccess(result)) {
-      throw new Error(`调整页面顺序失败: ${result.message || JSON.stringify(result)}`);
+    if (!isSuccess(pagesResult)) {
+      throw new Error(`获取当前页面顺序失败: ${getResultMessage(pagesResult)}`);
+    }
+
+    return toPages(pagesResult);
+  };
+
+  const getPagesToUpdate = (currentPages: (JournalPageEntry & { _id?: string })[]) => {
+    const currentPagesById = new Map(currentPages.map((page) => [page.id, page]));
+    const missingPageId = pageIds.find((pageId) => !currentPagesById.has(pageId));
+
+    if (missingPageId || currentPages.length !== pageIds.length) {
+      throw new Error("页面列表已变化，请刷新后重试");
+    }
+
+    return pageIds
+      .map((pageId, order) => ({ pageId, order, page: currentPagesById.get(pageId) }))
+      .filter(({ page, order }) => Number(page?.order) !== order);
+  };
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const pagesToUpdate = getPagesToUpdate(await getCurrentPages());
+
+    if (pagesToUpdate.length === 0) {
+      return;
+    }
+
+    await applyPageOrderUpdates(pagesCollection, notebookId, userId, pagesToUpdate);
+
+    if (attempt < maxAttempts) {
+      await wait(120);
     }
   }
+
+  await wait(120);
+  if (getPagesToUpdate(await getCurrentPages()).length === 0) {
+    return;
+  }
+
+  throw new Error("页面顺序同步未生效，请稍后重试");
 }
 
 // ── 辅助函数 ──────────────────────────────────────────────────────────────

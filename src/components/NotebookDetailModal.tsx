@@ -56,7 +56,9 @@ export function NotebookDetailModal({
 
     try {
       await deletePage(pageId, notebook.id);
-      const newPages = pages.filter((p) => p.id !== pageId);
+      const newPages = pages
+        .filter((p) => p.id !== pageId)
+        .map((page, order) => ({ ...page, order }));
       setPages(newPages);
 
       const updated = { ...notebook, pageCount: newPages.length };
@@ -116,24 +118,27 @@ export function NotebookDetailModal({
   const handleDrop = async (targetIndex: number) => {
     if (draggedItem === null || draggedItem === targetIndex) return;
 
+    const previousPages = pages;
+
     try {
       setIsReordering(true);
 
       const newPages = [...pages];
       const [removed] = newPages.splice(draggedItem, 1);
       newPages.splice(targetIndex, 0, removed);
-      setPages(newPages);
+      const reorderedPages = newPages.map((page, order) => ({ ...page, order }));
+      setPages(reorderedPages);
 
       await reorderPages(
         notebook.id,
-        newPages.map((p) => p.id)
+        reorderedPages.map((p) => p.id)
       );
-
-      setDraggedItem(null);
     } catch (err) {
+      setPages(previousPages);
       setError(err instanceof Error ? err.message : "调整顺序失败");
       console.error("调整顺序错误:", err);
     } finally {
+      setDraggedItem(null);
       setIsReordering(false);
     }
   };
@@ -216,7 +221,7 @@ export function NotebookDetailModal({
                   >
                     <img
                       src={page.imageUrl}
-                      alt={`第 ${page.order + 1} 页`}
+                      alt={`第 ${index + 1} 页`}
                     />
                   </div>
 
@@ -233,7 +238,7 @@ export function NotebookDetailModal({
                   </div>
 
                   {/* 页码 */}
-                  <p className="notebook-page-number">第 {page.order + 1} 页</p>
+                  <p className="notebook-page-number">第 {index + 1} 页</p>
                 </div>
               ))}
             </div>
