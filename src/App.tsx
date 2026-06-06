@@ -9,6 +9,7 @@ import {
   Layers3,
   Link as LinkIcon,
   Loader2,
+  LogOut,
   Palette,
   Save,
   Sparkles,
@@ -22,6 +23,8 @@ import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from "react";
 import { useEffect, useState } from "react";
 import { ErrorAlert } from "./lib/ErrorAlert";
 import { ApiConfigPanel } from "./lib/ApiConfigPanel";
+import { useAuth } from "./contexts/AuthContext";
+import { AuthPage } from "./components/AuthPage";
 import {
   decorationOptions,
   edgeStyleOptions,
@@ -89,15 +92,36 @@ const downloadDataUrl = (dataUrl: string, filename: string) => {
 };
 
 function App() {
-   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
-   const [answers, setAnswers] = useState<UserAnswers>(() => ({
-     ...defaultAnswers,
-     customTags: getAllCustomTags(),
-   }));
-   const [styleId, setStyleId] = useState<StyleId>("auto");
-   const [templateId, setTemplateId] = useState<TemplateId>("collage");
-   const [draft, setDraft] = useState<JournalDraft | null>(null);
-   const [isProcessing, setIsProcessing] = useState(false);
+    // 认证管理
+    const { user, isLoading: authLoading, signOut } = useAuth();
+    const [showAuthPage, setShowAuthPage] = useState(!user);
+
+    // 如果正在加载认证状态，显示加载中
+    if (authLoading) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-gray-700 font-medium">加载认证信息中...</p>
+          </div>
+        </div>
+      );
+    }
+
+    // 如果未登录或显示认证页面，显示认证页面
+    if (!user || showAuthPage) {
+      return <AuthPage onAuthSuccess={() => setShowAuthPage(false)} />;
+    }
+
+    const [photos, setPhotos] = useState<PhotoAsset[]>([]);
+    const [answers, setAnswers] = useState<UserAnswers>(() => ({
+      ...defaultAnswers,
+      customTags: getAllCustomTags(),
+    }));
+    const [styleId, setStyleId] = useState<StyleId>("auto");
+    const [templateId, setTemplateId] = useState<TemplateId>("collage");
+    const [draft, setDraft] = useState<JournalDraft | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
    const [isGenerating, setIsGenerating] = useState(false);
    const [error, setError] = useState("");
    const [isErrorAlertOpen, setIsErrorAlertOpen] = useState(false);
@@ -561,20 +585,68 @@ function App() {
 
   return (
     <main className={classNames("app", draft ? "has-draft" : false, `style-${activeStyle}`, `template-${templateId}`)}>
+      {/* 用户信息栏 */}
+      <div className="user-header" style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '0.75em 1.5em',
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        borderBottom: '1px solid #f0f0f0',
+        fontSize: '0.9em',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5em' }}>
+          <span style={{ color: '#666' }}>欢迎，</span>
+          <span style={{ fontWeight: '500', color: '#333' }}>
+            {user?.nickname || user?.username || user?.email || '用户'}
+          </span>
+        </div>
+        <button
+          onClick={async () => {
+            await signOut();
+            setShowAuthPage(true);
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.35em',
+            padding: '0.4em 0.8em',
+            backgroundColor: '#f5f5f5',
+            border: '1px solid #ddd',
+            borderRadius: '0.35em',
+            cursor: 'pointer',
+            fontSize: '0.85em',
+            color: '#666',
+            transition: 'all 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#efefef';
+            e.currentTarget.style.borderColor = '#ccc';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#f5f5f5';
+            e.currentTarget.style.borderColor = '#ddd';
+          }}
+        >
+          <LogOut size={14} />
+          <span>登出</span>
+        </button>
+      </div>
+
       <section className="upload-band">
          <div className="upload-band-controls">
-           <button
-             className={classNames("sound-toggle", soundEnabled && "is-on")}
-             type="button"
-             aria-pressed={soundEnabled}
-             aria-label={soundEnabled ? "关闭声音" : "打开声音"}
-             title={soundEnabled ? "关闭声音" : "打开声音"}
-             onClick={toggleSound}
-           >
-             {soundEnabled ? <Volume2 size={19} /> : <VolumeX size={19} />}
-           </button>
-           <ApiConfigPanel />
-         </div>
+            <button
+              className={classNames("sound-toggle", soundEnabled && "is-on")}
+              type="button"
+              aria-pressed={soundEnabled}
+              aria-label={soundEnabled ? "关闭声音" : "打开声音"}
+              title={soundEnabled ? "关闭声音" : "打开声音"}
+              onClick={toggleSound}
+            >
+              {soundEnabled ? <Volume2 size={19} /> : <VolumeX size={19} />}
+            </button>
+            <ApiConfigPanel />
+          </div>
         <div className="upload-studio">
           <div className="studio-preview" aria-hidden="true">
             <div className="post-scene atelier-scene">
