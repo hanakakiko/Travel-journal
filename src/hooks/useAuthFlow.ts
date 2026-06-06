@@ -37,22 +37,22 @@ export function useAuthFlow(options?: UseAuthFlowOptions) {
     [auth, options]
   );
 
-  const signup = useCallback(
+  // 第一步：发送注册验证码
+  const sendSignUpCode = useCallback(
     async (email: string, password: string, nickname?: string) => {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await auth.signUpWithEmail(email, '', password, nickname);
+        const result = await auth.sendSignUpCode(email, password, nickname);
         if (result.error) {
-          const errorMsg = result.error.message || '注册失败';
+          const errorMsg = result.error.message || '发送验证码失败';
           setError(errorMsg);
           options?.onError?.(errorMsg);
           return false;
         }
-        options?.onSuccess?.();
         return true;
       } catch (err: any) {
-        const errorMsg = err?.message || '注册失败，请稍后重试';
+        const errorMsg = err?.message || '发送验证码失败，请稍后重试';
         setError(errorMsg);
         options?.onError?.(errorMsg);
         return false;
@@ -63,22 +63,13 @@ export function useAuthFlow(options?: UseAuthFlowOptions) {
     [auth, options]
   );
 
+  // 第二步：验证码验证，完成注册
   const verifyAndSignup = useCallback(
-    async (
-      email: string,
-      verificationCode: string,
-      password: string,
-      nickname?: string
-    ) => {
+    async (token: string) => {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await auth.signUpWithEmail(
-          email,
-          verificationCode,
-          password,
-          nickname
-        );
+        const result = await auth.verifySignUpCode(token);
         if (result.error) {
           const errorMsg = result.error.message || '验证失败';
           setError(errorMsg);
@@ -115,7 +106,7 @@ export function useAuthFlow(options?: UseAuthFlowOptions) {
     error,
     setError,
     login,
-    signup,
+    sendSignUpCode,
     verifyAndSignup,
     logout,
     user: auth.user,

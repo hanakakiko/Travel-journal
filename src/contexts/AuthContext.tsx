@@ -31,11 +31,15 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
-  signUpWithEmail: (
+  // 第一步：发送验证码（同时提交 email + password + nickname）
+  sendSignUpCode: (
     email: string,
-    verificationCode?: string,
-    password?: string,
+    password: string,
     nickname?: string
+  ) => Promise<{ data?: any; error?: any }>;
+  // 第二步：验证码验证完成注册
+  verifySignUpCode: (
+    token: string
   ) => Promise<{ data?: any; error?: any }>;
   signInWithPassword: (
     username: string,
@@ -66,7 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const verifyOtpFunctionRef = useRef<any>(null);
+  // 保存 signUp 返回的 verifyOtp 函数，用 ref 避免重渲染导致引用失效
+  const verifyOtpRef = useRef<((params: { token: string }) => Promise<any>) | null>(null);
 
   // 初始化时检查登录状态
   useEffect(() => {
@@ -96,74 +101,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 邮箱验证码注册
-  const signUpWithEmail = async (
+  /**
+   * 第一步：发送邮箱注册验证码
+   * 根据 CloudBase 文档，signUp 时一次性传入 email + password + nickname，
+   * 并将返回的 verifyOtp 函数保存到 ref 中供第二步使用。
+   */
+  const sendSignUpCode = async (
     email: string,
-    verificationCode?: string,
-    password?: string,
+    password: string,
     nickname?: string
   ): Promise<{ data?: any; error?: any }> => {
     try {
       const app = getCloudbaseApp();
       const auth = app.auth({ persistence: 'local' });
 
-      // 如果没有提供验证码，则发送验证码
-      if (!verificationCode) {
-        const { data, error } = await auth.signUp({ email });
-        
-        if (error) {
-          return { error };
-        }
+      const signUpParams: any = { email, password };
+      if (nickname) signUpParams.nickname = nickname;
 
-        // 保存 verifyOtp 函数供后续使用
-        verifyOtpFunctionRef.current = data?.verifyOtp;
+      const { data, error } = await auth.signUp(signUpParams);
 
-        return { 
-          data: {
-            verifyOtp: data?.verifyOtp,
-            email,
-          }
-        };
+      if (error) {
+        return { error };
       }
 
-      // 如果提供了验证码，则使用保存的 verifyOtp 函数进行验证
-      if (!verifyOtpFunctionRef.current) {
-        return { 
-          error: {
-            message: '验证码已过期，请重新发送'
-          }
-        };
-      }
+      // 保存 verifyOtp 函数，供第二步调用
+      verifyOtpRef.current = data?.verifyOtp ?? null;
 
-      try {
-        // 使用保存的 verifyOtp 函数验证码，这会完成注册
-        const verifyResult = await verifyOtpFunctionRef.current({ 
-          token: verificationCode,
-          password,
-          name: nickname || undefined
-        });
-        
-        if (verifyResult?.error) {
-          return { error: verifyResult.error };
-        }
-
-        // 清除保存的 verifyOtp 函数
-        verifyOtpFunctionRef.current = null;
-
-        // 更新用户状态
-        await checkAuthStatus();
-        return { data: verifyResult?.data };
-      } catch (verifyError: any) {
-        return {
-          error: {
-            message: verifyError?.message || '验证码验证失败'
-          }
-        };
-      }
+      return { data };
     } catch (error: any) {
-      return { 
+      return {
         error: {
-          message: error?.message || '注册失败，请稍后重试'
+          message: error?.message || '发送验证码失败，请稍后重试'
+        }
+      };
+    }
+  };
+
+  /**
+   * 第二步：验证邮箱验证码，完成注册
+   * 根据 CloudBase 文档，verifyOtp 只接受 { token }
+   */
+  const verifySignUpCode = async (
+    token: string
+  ): Promise<{ data?: any; error?: any }> => {
+    if (!verifyOtpRef.current) {
+      return {
+        error: {
+          message: '验证码已过期，请重新发送'
+        }
+      };
+    }
+
+    try {
+      const { data, error } = await verifyOtpRef.current({ token });
+
+      if (error) {
+        return { error };
+      }
+
+      // 验证成功，清除 ref
+      verifyOtpRef.current = null;
+
+      // 更新用户状态
+      await checkAuthStatus();
+      return { data };
+    } catch (error: any) {
+      return {
+        error: {
+          message: error?.message || '验证码错误，请重新输入'
         }
       };
     }
@@ -189,7 +194,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const isRegistered = await auth.isUsernameRegistered(username);
           
           if (!isRegistered) {
-            // 用户不存在
             return { 
               error: {
                 message: '该用户名不存在',
@@ -197,7 +201,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
             };
           } else {
-            // 用户存在，但密码错误
             return { 
               error: {
                 message: '密码错误，请重试',
@@ -206,7 +209,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             };
           }
         } catch (checkError) {
-          // 如果检查失败，返回原始错误
           return { error };
         }
       }
@@ -261,7 +263,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     session,
     isLoading,
-    signUpWithEmail,
+    sendSignUpCode,
+    verifySignUpCode,
     signInWithPassword,
     signOut,
     getSession,

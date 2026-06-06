@@ -3,7 +3,7 @@ import { Mail, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export function EmailSignUp() {
-  const { signUpWithEmail } = useAuth();
+  const { sendSignUpCode, verifySignUpCode } = useAuth();
   const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [password, setPassword] = useState('');
@@ -11,107 +11,87 @@ export function EmailSignUp() {
   const [nickname, setNickname] = useState('');
   
   // 状态管理
-  const [step, setStep] = useState<'email' | 'verify'>('email');
+  const [step, setStep] = useState<'form' | 'verify'>('form');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [codeSent, setCodeSent] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
-  // 处理发送验证码
+  const startCountdown = () => {
+    setCountdown(60);
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // 第一步：校验表单，调用 signUp（同时传入 email + password + nickname），发送验证码
   const handleSendCode = async () => {
     setError(null);
     setSuccess(null);
 
-    // 验证邮箱格式
     if (!email || !email.includes('@')) {
       setError('请输入有效的邮箱地址');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      // 这里调用 SDK 发送验证码
-      // 根据 CloudBase 文档，先调用 signUp 获取验证码发送
-      const { data, error: signUpError } = await signUpWithEmail(email);
-      
-      if (signUpError) {
-        setError(signUpError.message || '发送验证码失败，请稍后重试');
-        return;
-      }
-
-      setSuccess('验证码已发送到您的邮箱，请查收');
-      setCodeSent(true);
-      setStep('verify');
-      setCountdown(60);
-
-      // 倒计时
-      const timer = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 处理完成注册
-  const handleVerifyAndRegister = async () => {
-    setError(null);
-    setSuccess(null);
-
-    // 验证输入
-    if (!verificationCode) {
-      setError('请输入验证码');
       return;
     }
     if (!password) {
       setError('请设置密码');
       return;
     }
-    if (password !== confirmPassword) {
-      setError('两次输入的密码不一致');
-      return;
-    }
     if (password.length < 6) {
       setError('密码长度至少 6 位');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('两次输入的密码不一致');
       return;
     }
 
     setIsLoading(true);
     try {
-      // 调用验证和注册
-      const result = await signUpWithEmail(
-        email,
-        verificationCode,
-        password,
-        nickname
-      );
+      const { error: signUpError } = await sendSignUpCode(email, password, nickname || undefined);
 
-      if (result.error) {
-        setError(result.error.message || '注册失败，请稍后重试');
+      if (signUpError) {
+        setError(signUpError.message || '发送验证码失败，请稍后重试');
         return;
       }
 
-      setSuccess('注册成功！');
-      // 清空表单
-      setEmail('');
-      setVerificationCode('');
-      setPassword('');
-      setConfirmPassword('');
-      setNickname('');
-      setStep('email');
-      setCodeSent(false);
+      setSuccess('验证码已发送到您的邮箱，请查收');
+      setStep('verify');
+      startCountdown();
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      // 可选：在此处导航到主页或其他页面
+  // 第二步：验证码验证，完成注册
+  const handleVerify = async () => {
+    setError(null);
+    setSuccess(null);
+
+    if (!verificationCode) {
+      setError('请输入验证码');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error: verifyError } = await verifySignUpCode(verificationCode);
+
+      if (verifyError) {
+        setError(verifyError.message || '验证失败，请重新输入');
+        return;
+      }
+
+      setSuccess('注册成功！3秒后自动跳转...');
       setTimeout(() => {
         window.location.href = '/';
-      }, 1500);
+      }, 3000);
     } finally {
       setIsLoading(false);
     }
@@ -140,8 +120,8 @@ export function EmailSignUp() {
         </div>
       )}
 
-      {/* 第一步：输入邮箱 */}
-      {step === 'email' && (
+      {/* 第一步：填写注册信息 */}
+      {step === 'form' && (
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -155,48 +135,6 @@ export function EmailSignUp() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               disabled={isLoading}
             />
-          </div>
-
-          <button
-            onClick={handleSendCode}
-            disabled={isLoading || !email}
-            className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                发送中...
-              </>
-            ) : (
-              '发送验证码'
-            )}
-          </button>
-
-          <p className="text-xs text-gray-600 text-center">
-            注册即表示同意我们的服务条款和隐私政策
-          </p>
-        </div>
-      )}
-
-      {/* 第二步：验证码和密码 */}
-      {step === 'verify' && (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              验证码 {countdown > 0 && <span className="text-gray-500">({countdown}s)</span>}
-            </label>
-            <input
-              type="text"
-              value={verificationCode}
-              onChange={(e) => setVerificationCode(e.target.value.trim())}
-              placeholder="请输入邮箱验证码"
-              maxLength={6}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              验证码已发送到 {email}
-            </p>
           </div>
 
           <div>
@@ -241,30 +179,72 @@ export function EmailSignUp() {
             />
           </div>
 
+          <button
+            onClick={handleSendCode}
+            disabled={isLoading || !email || !password || !confirmPassword}
+            className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                发送中...
+              </>
+            ) : (
+              '发送验证码'
+            )}
+          </button>
+
+          <p className="text-xs text-gray-600 text-center">
+            注册即表示同意我们的服务条款和隐私政策
+          </p>
+        </div>
+      )}
+
+      {/* 第二步：输入验证码 */}
+      {step === 'verify' && (
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 text-center">
+            验证码已发送到 <span className="font-medium text-gray-800">{email}</span>
+          </p>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              验证码
+            </label>
+            <input
+              type="text"
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value.trim())}
+              placeholder="请输入邮箱验证码"
+              maxLength={6}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isLoading}
+              autoFocus
+            />
+          </div>
+
           <div className="flex gap-2">
             <button
               onClick={() => {
-                setStep('email');
+                setStep('form');
                 setVerificationCode('');
-                setPassword('');
-                setConfirmPassword('');
                 setError(null);
                 setSuccess(null);
               }}
               disabled={isLoading}
-              className="flex-1 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="flex-1 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              返回
+              返回修改
             </button>
             <button
-              onClick={handleVerifyAndRegister}
-              disabled={isLoading}
+              onClick={handleVerify}
+              disabled={isLoading || !verificationCode}
               className="flex-1 py-2 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  注册中...
+                  验证中...
                 </>
               ) : (
                 '完成注册'
@@ -272,15 +252,13 @@ export function EmailSignUp() {
             </button>
           </div>
 
-          {countdown > 0 && (
-            <button
-              onClick={handleSendCode}
-              disabled={countdown > 0 || isLoading}
-              className="w-full text-blue-600 text-sm hover:text-blue-700 disabled:text-gray-400"
-            >
-              重新发送
-            </button>
-          )}
+          <button
+            onClick={handleSendCode}
+            disabled={countdown > 0 || isLoading}
+            className="w-full text-blue-600 text-sm hover:text-blue-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+          >
+            {countdown > 0 ? `${countdown}s 后可重新发送` : '重新发送验证码'}
+          </button>
         </div>
       )}
     </div>
