@@ -53,6 +53,8 @@ import { initializeUserSettings, getSoundEnabled, saveSoundEnabled } from "./lib
 import { EditableTagGroup } from "./components/EditableTagGroup";
 import { addTag, removeTag } from "./lib/tagManager";
 import { getAllCustomTags, saveCustomTags } from "./lib/customTagsStorage";
+import { saveFormDraft, loadFormDraft, clearFormDraft, hasFormDraft } from "./lib/formDraftStorage";
+import { useSceneDetailCustomOptions, getAllAvailableOptions } from "./hooks/useSceneDetailCustomOptions";
 
 const defaultAnswers: UserAnswers = {
    scene: "一次旅程",
@@ -97,13 +99,19 @@ function App() {
     const [showAuthPage, setShowAuthPage] = useState(!user);
     
     // 必须在条件语句之前声明所有 hooks
-    const [photos, setPhotos] = useState<PhotoAsset[]>([]);
+    // 初始化时尝试从草稿恢复，如果没有草稿则使用默认值
+    const formDraft = loadFormDraft();
+    const [photos, setPhotos] = useState<PhotoAsset[]>(formDraft?.photos ?? []);
     const [answers, setAnswers] = useState<UserAnswers>(() => ({
-      ...defaultAnswers,
-      customTags: getAllCustomTags(),
+      ...(formDraft?.answers ?? {
+        ...defaultAnswers,
+        customTags: getAllCustomTags(),
+      }),
+      // 确保 customTags 总是存在
+      customTags: formDraft?.answers.customTags ?? getAllCustomTags(),
     }));
-    const [styleId, setStyleId] = useState<StyleId>("auto");
-    const [templateId, setTemplateId] = useState<TemplateId>("collage");
+    const [styleId, setStyleId] = useState<StyleId>((formDraft?.styleId as StyleId) ?? "auto");
+    const [templateId, setTemplateId] = useState<TemplateId>((formDraft?.templateId as TemplateId) ?? "collage");
     const [draft, setDraft] = useState<JournalDraft | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -128,8 +136,10 @@ function App() {
     const [isVisionLoading, setIsVisionLoading] = useState(false);
     const [visionError, setVisionError] = useState("");
     const [soundEnabled, setSoundEnabled] = useState(() => getSoundEnabled());
-    const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>(() => getAllTemplates());
-    const [showTemplateManager, setShowTemplateManager] = useState(false);
+     const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>(() => getAllTemplates());
+     const [showTemplateManager, setShowTemplateManager] = useState(false);
+     // 显示草稿恢复提示（仅在有草稿且是新的会话时显示）
+     const [showDraftRecoveryTip, setShowDraftRecoveryTip] = useState(!!formDraft && formDraft.photos.length > 0);
 
     // 如果正在加载认证状态，显示加载中
     if (authLoading) {
@@ -288,8 +298,28 @@ function AppContent({
   setShowTemplateManager,
 }: AppContentProps) {
 
+  // 检查是否有已恢复的草稿
+  const hasDraftContent = photos.length > 0;
+  const [showDraftRecoveryTip, setShowDraftRecoveryTip] = useState(true);
+  const [draftWasRecovered] = useState(hasFormDraft() && hasDraftContent);
+
   const activeStyle = draft?.styleId ?? (styleId === "auto" ? "elegant" : styleId);
   const play = (effect: SoundEffect) => playSound(effect, soundEnabled);
+
+  // 清除所有表单数据和草稿
+  const clearAllFormData = () => {
+    if (window.confirm("确定要清空所有数据吗？这将删除所有已上传的照片和填写内容。")) {
+      clearFormDraft();
+      setPhotos([]);
+      setAnswers(defaultAnswers);
+      setStyleId("auto");
+      setTemplateId("collage");
+      setDraft(null);
+      setRemoteUrls([]);
+      setShowDraftRecoveryTip(false);
+      play("tap");
+    }
+  };
 
   const handleSaveTemplate = (name: string, coverImageUrl?: string) => {
     const newTemplate = saveTemplate(name, answers, styleId, templateId, coverImageUrl);
@@ -360,6 +390,16 @@ function AppContent({
   useEffect(() => {
     saveSoundEnabled(soundEnabled);
   }, [soundEnabled]);
+
+  // 自动保存表单草稿：监听 answers、photos、styleId、templateId 的变化
+  // 使用防抖避免频繁存储，但这里简化实现为直接存储（因为状态变化通常不会太频繁）
+  useEffect(() => {
+    // 防止在生成过程中保存（此时数据可能不完整）
+    if (isGenerating || isProcessing) return;
+    
+    // 保存表单数据到本地存储
+    saveFormDraft(answers, photos, styleId, templateId);
+  }, [answers, photos, styleId, templateId, isGenerating, isProcessing]);
 
   // 遮罩挂载/卸载节奏控制：进入立即、退出延迟 320ms（与 CSS leave 动画同步）。
   useEffect(() => {
@@ -640,6 +680,8 @@ function AppContent({
         return { ...current, visionTags: next };
       });
     }
+    // 删除照片时清除已生成的草稿（通常用户会重新调整）
+    setDraft(null);
   };
 
   const generateJournal = async (closeAfter = false) => {
@@ -771,10 +813,42 @@ function AppContent({
         >
           <LogOut size={14} />
           <span>登出</span>
-        </button>
-      </div>
+         </button>
+       </div>
 
-      <section className="upload-band">
+       {/* 草稿恢复提示 */}
+       {showDraftRecoveryTip && draftWasRecovered && (
+         <div style={{
+           backgroundColor: '#e8f5e9',
+           borderBottom: '1px solid #c8e6c9',
+           padding: '0.75em 1.5em',
+           fontSize: '0.9em',
+           display: 'flex',
+           justifyContent: 'space-between',
+           alignItems: 'center',
+           color: '#2e7d32',
+         }}>
+           <span>
+             ✓ 已恢复上次未完成的表单内容（{photos.length} 张照片）
+           </span>
+           <button
+             type="button"
+             onClick={() => setShowDraftRecoveryTip(false)}
+             style={{
+               backgroundColor: 'transparent',
+               border: 'none',
+               color: '#2e7d32',
+               cursor: 'pointer',
+               fontSize: '1em',
+               padding: '0 0.5em',
+             }}
+           >
+             ✕
+           </button>
+         </div>
+       )}
+
+       <section className="upload-band">
          <div className="upload-band-controls">
             <button
               className={classNames("sound-toggle", soundEnabled && "is-on")}
@@ -894,11 +968,25 @@ function AppContent({
                   <span className="upload-meta">多张图片一起装订</span>
                 </label>
               )}
-              <button className="sample-action" type="button" onClick={loadSamples} disabled={isProcessing}>
-                <Sparkles size={16} />
-                <span>借用练习素材</span>
-              </button>
-            </div>
+               <button className="sample-action" type="button" onClick={loadSamples} disabled={isProcessing}>
+                 <Sparkles size={16} />
+                 <span>借用练习素材</span>
+               </button>
+               {photos.length > 0 && (
+                 <button 
+                   className="sample-action" 
+                   type="button" 
+                   onClick={clearAllFormData}
+                   title="清除所有表单数据和照片"
+                   style={{
+                     color: '#d32f2f',
+                   }}
+                 >
+                   <Trash2 size={16} />
+                   <span>清除全部</span>
+                 </button>
+               )}
+             </div>
 
             <div className="atelier-steps" aria-label="制作步骤">
               <span>
@@ -1808,6 +1896,8 @@ function SceneDetails({
   onSetAnswers: Dispatch<SetStateAction<UserAnswers>>;
 }) {
   const sceneConfig = sceneOptions.find((scene) => scene.name === answers.scene);
+  const { customOptions, addCustomOption, removeCustomOption } = useSceneDetailCustomOptions();
+
   if (!sceneConfig?.fields.length) return null;
 
   // 仅统计"当前场景"已填写的字段数；切场景时切回去仍能看到原值。
@@ -1855,6 +1945,9 @@ function SceneDetails({
             key={field.key}
             field={field}
             value={answers.details?.[field.key] ?? ""}
+            customOptions={customOptions[field.key] ?? []}
+            onAddCustomOption={(option) => addCustomOption(field.key, option)}
+            onRemoveCustomOption={(option) => removeCustomOption(field.key, option)}
             onChange={(nextValue) => {
               onSetAnswers((current) => {
                 const nextDetails = { ...current.details };
@@ -1875,18 +1968,28 @@ function SceneDetails({
  *   - 无 options：纯输入框（保留旧逻辑）；
  *   - 单选 chip：点中即填，再点一次清空；
  *   - 多选 chip：点击 toggle，序列化用「、」拼接；
- *   - allowCustom：底部追加一个小输入框，回车追加到多选集合中。
+ *   - 自定义选项：底部追加一个小输入框，回车追加到自定义集合中。
  */
 function SceneDetailControl({
   field,
   value,
+  customOptions,
   onChange,
+  onAddCustomOption,
+  onRemoveCustomOption,
 }: {
   field: SceneDetailField;
   value: string;
+  customOptions?: string[];
   onChange: (next: string) => void;
+  onAddCustomOption?: (option: string) => void;
+  onRemoveCustomOption?: (option: string) => void;
 }) {
+  const [isAddingCustom, setIsAddingCustom] = useState(false);
+  const [customInput, setCustomInput] = useState("");
   const hasOptions = Array.isArray(field.options) && field.options.length > 0;
+  const custom = customOptions ?? [];
+  const allOptions = hasOptions ? [...(field.options || []), ...custom] : [];
 
   if (!hasOptions) {
     return (
@@ -1910,6 +2013,17 @@ function SceneDetailControl({
       const next = exists ? selected.filter((s) => s !== opt) : [...selected, opt];
       onChange(joinMulti(next));
     };
+
+    const handleAddCustom = () => {
+      const trimmed = customInput.trim();
+      if (!trimmed) return;
+      if (onAddCustomOption) {
+        onAddCustomOption(trimmed);
+        setCustomInput("");
+        setIsAddingCustom(false);
+      }
+    };
+
     return (
       <div className="scene-detail-item scene-detail-item-chips">
         <span>
@@ -1917,16 +2031,81 @@ function SceneDetailControl({
           <em className="scene-detail-multi-hint">多选</em>
         </span>
         <div className="chip-row">
-          {field.options!.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              className={classNames("chip", selected.includes(opt) && "is-on")}
-              onClick={() => toggle(opt)}
-            >
-              {opt}
-            </button>
+          {allOptions.map((opt) => (
+            <div key={opt} className={classNames("chip-wrapper", custom.includes(opt) && "is-custom")}>
+              <button
+                type="button"
+                className={classNames("chip", selected.includes(opt) && "is-on")}
+                onClick={() => toggle(opt)}
+              >
+                {opt}
+              </button>
+              {custom.includes(opt) && onRemoveCustomOption && (
+                <button
+                  type="button"
+                  className="chip-delete-btn"
+                  onClick={() => {
+                    onRemoveCustomOption(opt);
+                    // 如果删除的选项已被选中，需要取消选中
+                    if (selected.includes(opt)) {
+                      toggle(opt);
+                    }
+                  }}
+                  title="删除自定义选项"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
           ))}
+          {isAddingCustom ? (
+            <div className="chip-input-wrapper">
+              <input
+                type="text"
+                className="chip-input"
+                placeholder="输入新选项"
+                value={customInput}
+                onChange={(e) => setCustomInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleAddCustom();
+                  } else if (e.key === "Escape") {
+                    setIsAddingCustom(false);
+                    setCustomInput("");
+                  }
+                }}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="chip-input-confirm"
+                onClick={handleAddCustom}
+                title="确认"
+              >
+                <Check size={14} />
+              </button>
+              <button
+                type="button"
+                className="chip-input-cancel"
+                onClick={() => {
+                  setIsAddingCustom(false);
+                  setCustomInput("");
+                }}
+                title="取消"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="chip-add-button"
+              onClick={() => setIsAddingCustom(true)}
+              title="添加自定义选项"
+            >
+              +
+            </button>
+          )}
         </div>
       </div>
     );
@@ -1937,16 +2116,92 @@ function SceneDetailControl({
     <div className="scene-detail-item scene-detail-item-chips">
       <span>{field.label}</span>
       <div className="chip-row">
-        {field.options!.map((opt) => (
-          <button
-            key={opt}
-            type="button"
-            className={classNames("chip", value === opt && "is-on")}
-            onClick={() => onChange(value === opt ? "" : opt)}
-          >
-            {opt}
-          </button>
+        {allOptions.map((opt) => (
+          <div key={opt} className={classNames("chip-wrapper", custom.includes(opt) && "is-custom")}>
+            <button
+              type="button"
+              className={classNames("chip", value === opt && "is-on")}
+              onClick={() => onChange(value === opt ? "" : opt)}
+            >
+              {opt}
+            </button>
+            {custom.includes(opt) && onRemoveCustomOption && (
+              <button
+                type="button"
+                className="chip-delete-btn"
+                onClick={() => {
+                  onRemoveCustomOption(opt);
+                  if (value === opt) {
+                    onChange("");
+                  }
+                }}
+                title="删除自定义选项"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
         ))}
+        {isAddingCustom ? (
+          <div className="chip-input-wrapper">
+            <input
+              type="text"
+              className="chip-input"
+              placeholder="输入新选项"
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const trimmed = customInput.trim();
+                  if (trimmed && onAddCustomOption) {
+                    onAddCustomOption(trimmed);
+                    setCustomInput("");
+                    setIsAddingCustom(false);
+                  }
+                } else if (e.key === "Escape") {
+                  setIsAddingCustom(false);
+                  setCustomInput("");
+                }
+              }}
+              autoFocus
+            />
+            <button
+              type="button"
+              className="chip-input-confirm"
+              onClick={() => {
+                const trimmed = customInput.trim();
+                if (trimmed && onAddCustomOption) {
+                  onAddCustomOption(trimmed);
+                  setCustomInput("");
+                  setIsAddingCustom(false);
+                }
+              }}
+              title="确认"
+            >
+              <Check size={14} />
+            </button>
+            <button
+              type="button"
+              className="chip-input-cancel"
+              onClick={() => {
+                setIsAddingCustom(false);
+                setCustomInput("");
+              }}
+              title="取消"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="chip-add-button"
+            onClick={() => setIsAddingCustom(true)}
+            title="添加自定义选项"
+          >
+            +
+          </button>
+        )}
       </div>
     </div>
   );
