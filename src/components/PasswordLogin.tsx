@@ -155,24 +155,23 @@ export function PasswordLogin({ onSignUpClick, onLoginSuccess }: PasswordLoginPr
            style={{
              minHeight: '42px',
              padding: '8px 12px',
-             border: '2px solid var(--ink)',
+             border: loginMode === 'password' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
              borderRadius: '14px',
-             background: 'var(--ink)',
-             color: '#fff7eb',
+             background: loginMode === 'password' ? 'var(--ink)' : '#fffaf0',
+             color: loginMode === 'password' ? '#fff7eb' : 'var(--ink)',
              fontWeight: 900,
              fontSize: '14px',
              cursor: 'pointer',
              transition: 'all 0.2s ease',
-             opacity: loginMode === 'password' ? 1 : 0.7,
            }}
            onMouseEnter={(e) => {
              if (loginMode !== 'password') {
-               e.currentTarget.style.opacity = '0.85';
+               e.currentTarget.style.background = '#fff0e0';
              }
            }}
            onMouseLeave={(e) => {
              if (loginMode !== 'password') {
-               e.currentTarget.style.opacity = '0.7';
+               e.currentTarget.style.background = '#fffaf0';
              }
            }}
          >
@@ -186,24 +185,23 @@ export function PasswordLogin({ onSignUpClick, onLoginSuccess }: PasswordLoginPr
            style={{
              minHeight: '42px',
              padding: '8px 12px',
-             border: '2px solid var(--ink)',
+             border: loginMode === 'email-otp' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
              borderRadius: '14px',
-             background: 'var(--ink)',
-             color: '#fff7eb',
+             background: loginMode === 'email-otp' ? 'var(--ink)' : '#fffaf0',
+             color: loginMode === 'email-otp' ? '#fff7eb' : 'var(--ink)',
              fontWeight: 900,
              fontSize: '14px',
              cursor: 'pointer',
              transition: 'all 0.2s ease',
-             opacity: loginMode === 'email-otp' ? 1 : 0.7,
            }}
            onMouseEnter={(e) => {
              if (loginMode !== 'email-otp') {
-               e.currentTarget.style.opacity = '0.85';
+               e.currentTarget.style.background = '#fff0e0';
              }
            }}
            onMouseLeave={(e) => {
              if (loginMode !== 'email-otp') {
-               e.currentTarget.style.opacity = '0.7';
+               e.currentTarget.style.background = '#fffaf0';
              }
            }}
          >

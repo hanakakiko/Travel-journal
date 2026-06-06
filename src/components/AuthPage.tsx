@@ -70,10 +70,10 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
               style={{
                 minHeight: '46px',
                 padding: '10px 16px',
-                border: '2px solid var(--ink)',
+                border: mode === 'login' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
                 borderRadius: '16px',
-                background: mode === 'login' ? 'var(--ink)' : 'var(--ink)',
-                color: '#fff7eb',
+                background: mode === 'login' ? 'var(--ink)' : '#fffaf0',
+                color: mode === 'login' ? '#fff7eb' : 'var(--ink)',
                 fontWeight: 900,
                 fontSize: '16px',
                 cursor: 'pointer',
@@ -82,17 +82,16 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
                 justifyContent: 'center',
                 gap: '8px',
                 transition: 'all 0.2s ease',
-                boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.15)',
-                opacity: mode === 'login' ? 1 : 0.75,
+                boxShadow: mode === 'login' ? '3px 4px 0 rgba(38, 29, 26, 0.15)' : 'none',
               }}
               onMouseEnter={(e) => {
                 if (mode !== 'login') {
-                  e.currentTarget.style.opacity = '0.9';
+                  e.currentTarget.style.background = '#fff0e0';
                 }
               }}
               onMouseLeave={(e) => {
                 if (mode !== 'login') {
-                  e.currentTarget.style.opacity = '0.75';
+                  e.currentTarget.style.background = '#fffaf0';
                 }
               }}
             >
@@ -105,10 +104,10 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
               style={{
                 minHeight: '46px',
                 padding: '10px 16px',
-                border: '2px solid var(--ink)',
+                border: mode === 'signup' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
                 borderRadius: '16px',
-                background: mode === 'signup' ? 'var(--ink)' : 'var(--ink)',
-                color: '#fff7eb',
+                background: mode === 'signup' ? 'var(--ink)' : '#fffaf0',
+                color: mode === 'signup' ? '#fff7eb' : 'var(--ink)',
                 fontWeight: 900,
                 fontSize: '16px',
                 cursor: 'pointer',
@@ -117,17 +116,16 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
                 justifyContent: 'center',
                 gap: '8px',
                 transition: 'all 0.2s ease',
-                boxShadow: '3px 4px 0 rgba(38, 29, 26, 0.15)',
-                opacity: mode === 'signup' ? 1 : 0.75,
+                boxShadow: mode === 'signup' ? '3px 4px 0 rgba(38, 29, 26, 0.15)' : 'none',
               }}
               onMouseEnter={(e) => {
                 if (mode !== 'signup') {
-                  e.currentTarget.style.opacity = '0.9';
+                  e.currentTarget.style.background = '#fff0e0';
                 }
               }}
               onMouseLeave={(e) => {
                 if (mode !== 'signup') {
-                  e.currentTarget.style.opacity = '0.75';
+                  e.currentTarget.style.background = '#fffaf0';
                 }
               }}
             >
@@ -156,10 +154,10 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
                     style={{
                       minHeight: '42px',
                       padding: '8px 12px',
-                      border: '2px solid var(--ink)',
+                      border: signUpMethod === 'email' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
                       borderRadius: '14px',
-                      background: 'var(--ink)',
-                      color: '#fff7eb',
+                      background: signUpMethod === 'email' ? 'var(--ink)' : '#fffaf0',
+                      color: signUpMethod === 'email' ? '#fff7eb' : 'var(--ink)',
                       fontWeight: 900,
                       fontSize: '14px',
                       cursor: 'pointer',
@@ -168,16 +166,15 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
                       justifyContent: 'center',
                       gap: '6px',
                       transition: 'all 0.2s ease',
-                      opacity: signUpMethod === 'email' ? 1 : 0.7,
                     }}
                     onMouseEnter={(e) => {
                       if (signUpMethod !== 'email') {
-                        e.currentTarget.style.opacity = '0.85';
+                        e.currentTarget.style.background = '#fff0e0';
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (signUpMethod !== 'email') {
-                        e.currentTarget.style.opacity = '0.7';
+                        e.currentTarget.style.background = '#fffaf0';
                       }
                     }}
                   >
@@ -189,10 +186,10 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
                     style={{
                       minHeight: '42px',
                       padding: '8px 12px',
-                      border: '2px solid var(--ink)',
+                      border: signUpMethod === 'username' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
                       borderRadius: '14px',
-                      background: 'var(--ink)',
-                      color: '#fff7eb',
+                      background: signUpMethod === 'username' ? 'var(--ink)' : '#fffaf0',
+                      color: signUpMethod === 'username' ? '#fff7eb' : 'var(--ink)',
                       fontWeight: 900,
                       fontSize: '14px',
                       cursor: 'pointer',
@@ -201,16 +198,15 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
                       justifyContent: 'center',
                       gap: '6px',
                       transition: 'all 0.2s ease',
-                      opacity: signUpMethod === 'username' ? 1 : 0.7,
                     }}
                     onMouseEnter={(e) => {
                       if (signUpMethod !== 'username') {
-                        e.currentTarget.style.opacity = '0.85';
+                        e.currentTarget.style.background = '#fff0e0';
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (signUpMethod !== 'username') {
-                        e.currentTarget.style.opacity = '0.7';
+                        e.currentTarget.style.background = '#fffaf0';
                       }
                     }}
                   >
