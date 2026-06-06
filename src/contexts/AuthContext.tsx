@@ -175,7 +175,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        return { error };
+        // 登录失败时，先检查用户是否存在
+        try {
+          const isRegistered = await auth.isUsernameRegistered(username);
+          
+          if (!isRegistered) {
+            // 用户不存在
+            return { 
+              error: {
+                message: '该用户名不存在',
+                code: 'USERNAME_NOT_FOUND'
+              }
+            };
+          } else {
+            // 用户存在，但密码错误
+            return { 
+              error: {
+                message: '密码错误，请重试',
+                code: 'INVALID_PASSWORD'
+              }
+            };
+          }
+        } catch (checkError) {
+          // 如果检查失败，返回原始错误
+          return { error };
+        }
       }
 
       // 更新用户状态

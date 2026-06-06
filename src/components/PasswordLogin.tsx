@@ -28,7 +28,14 @@ export function PasswordLogin() {
       const result = await signInWithPassword(username, password);
 
       if (result.error) {
-        setError(result.error.message || '登录失败，请检查用户名和密码');
+        // 显示具体的错误信息
+        if (result.error.code === 'USERNAME_NOT_FOUND') {
+          setError('该用户名不存在，请检查或先注册账号');
+        } else if (result.error.code === 'INVALID_PASSWORD') {
+          setError('密码错误，请重试');
+        } else {
+          setError(result.error.message || '登录失败，请稍后重试');
+        }
         return;
       }
 
