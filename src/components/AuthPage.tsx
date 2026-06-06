@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Mail, LogIn } from 'lucide-react';
+import { Mail, LogIn, User } from 'lucide-react';
 import { EmailSignUp } from './EmailSignUp';
+import { UsernameSignUp } from './UsernameSignUp';
 import { PasswordLogin } from './PasswordLogin';
 
 export type AuthMode = 'login' | 'signup';
+export type SignUpMethod = 'email' | 'username';
 
 interface AuthPageProps {
   initialMode?: AuthMode;
@@ -12,6 +14,7 @@ interface AuthPageProps {
 
 export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
+  const [signUpMethod, setSignUpMethod] = useState<SignUpMethod>('email');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -47,7 +50,40 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
            {mode === 'login' ? (
              <PasswordLogin onSignUpClick={() => setMode('signup')} onLoginSuccess={onAuthSuccess} />
            ) : (
-             <EmailSignUp onSignUpSuccess={onAuthSuccess} />
+             <>
+               {/* 注册方式选择 */}
+               <div className="flex gap-2 mb-6 bg-gray-100 rounded-lg p-1">
+                 <button
+                   onClick={() => setSignUpMethod('email')}
+                   className={`flex-1 py-2 px-3 rounded-lg font-medium transition-all flex items-center justify-center gap-1 text-sm ${
+                     signUpMethod === 'email'
+                       ? 'bg-blue-600 text-white'
+                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                   }`}
+                 >
+                   <Mail className="w-4 h-4" />
+                   邮箱注册
+                 </button>
+                 <button
+                   onClick={() => setSignUpMethod('username')}
+                   className={`flex-1 py-2 px-3 rounded-lg font-medium transition-all flex items-center justify-center gap-1 text-sm ${
+                     signUpMethod === 'username'
+                       ? 'bg-indigo-600 text-white'
+                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                   }`}
+                 >
+                   <User className="w-4 h-4" />
+                   用户名注册
+                 </button>
+               </div>
+
+               {/* 注册表单 */}
+               {signUpMethod === 'email' ? (
+                 <EmailSignUp onSignUpSuccess={onAuthSuccess} />
+               ) : (
+                 <UsernameSignUp onSignUpSuccess={onAuthSuccess} />
+               )}
+             </>
            )}
          </div>
 
