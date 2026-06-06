@@ -174,43 +174,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 账号密码登录
+  // 账号密码登录（支持邮箱或用户名）
   const signInWithPassword = async (
-    username: string,
+    identifier: string,
     password: string
   ): Promise<{ data?: any; error?: any }> => {
     try {
       const app = getCloudbaseApp();
       const auth = app.auth({ persistence: 'local' });
 
-      const { data, error } = await auth.signInWithPassword({
-        username,
-        password,
-      });
+      // 根据输入内容自动判断登录方式：包含 @ 则视为邮箱
+      const credentials = identifier.includes('@')
+        ? { email: identifier, password }
+        : { username: identifier, password };
+
+      const { data, error } = await auth.signInWithPassword(credentials);
 
       if (error) {
-        // 登录失败时，先检查用户是否存在
-        try {
-          const isRegistered = await auth.isUsernameRegistered(username);
-          
-          if (!isRegistered) {
-            return { 
-              error: {
-                message: '该用户名不存在',
-                code: 'USERNAME_NOT_FOUND'
-              }
-            };
-          } else {
-            return { 
-              error: {
-                message: '密码错误，请重试',
-                code: 'INVALID_PASSWORD'
-              }
-            };
-          }
-        } catch (checkError) {
-          return { error };
-        }
+        return { error: { message: error.message || '用户名或密码错误，请重试' } };
       }
 
       // 更新用户状态

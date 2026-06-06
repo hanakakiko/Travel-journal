@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { LogIn, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-export function PasswordLogin() {
+interface PasswordLoginProps {
+  onSignUpClick?: () => void;
+}
+
+export function PasswordLogin({ onSignUpClick }: PasswordLoginProps) {
   const { signInWithPassword } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -28,14 +32,7 @@ export function PasswordLogin() {
       const result = await signInWithPassword(username, password);
 
       if (result.error) {
-        // 显示具体的错误信息
-        if (result.error.code === 'USERNAME_NOT_FOUND') {
-          setError('该用户名不存在，请检查或先注册账号');
-        } else if (result.error.code === 'INVALID_PASSWORD') {
-          setError('密码错误，请重试');
-        } else {
-          setError(result.error.message || '登录失败，请稍后重试');
-        }
+        setError(result.error.message || '登录失败，请稍后重试');
         return;
       }
 
@@ -74,23 +71,23 @@ export function PasswordLogin() {
         </div>
       )}
 
-      {/* 用户名输入 */}
+      {/* 邮箱/用户名输入 */}
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          用户名
+          邮箱 / 用户名
         </label>
         <input
           type="text"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="请输入用户名"
+          placeholder="请输入邮箱或用户名"
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           disabled={isLoading}
           autoComplete="username"
         />
         <p className="text-xs text-gray-500 mt-1">
-          可以使用注册时设置的用户名
+          邮箱注册的用户请输入邮箱地址
         </p>
       </div>
 
@@ -148,9 +145,12 @@ export function PasswordLogin() {
       <div className="mt-6 text-center space-y-2">
         <p className="text-sm text-gray-600">
           没有账号？
-          <a href="/signup" className="text-blue-600 hover:text-blue-700 font-medium">
+          <button
+            onClick={onSignUpClick}
+            className="text-blue-600 hover:text-blue-700 font-medium bg-none border-none cursor-pointer p-0 m-0"
+          >
             立即注册
-          </a>
+          </button>
         </p>
         <p className="text-sm text-gray-600">
           <a href="/reset-password" className="text-blue-600 hover:text-blue-700">
