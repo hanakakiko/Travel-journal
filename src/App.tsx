@@ -95,6 +95,41 @@ function App() {
     // 认证管理
     const { user, isLoading: authLoading, signOut } = useAuth();
     const [showAuthPage, setShowAuthPage] = useState(!user);
+    
+    // 必须在条件语句之前声明所有 hooks
+    const [photos, setPhotos] = useState<PhotoAsset[]>([]);
+    const [answers, setAnswers] = useState<UserAnswers>(() => ({
+      ...defaultAnswers,
+      customTags: getAllCustomTags(),
+    }));
+    const [styleId, setStyleId] = useState<StyleId>("auto");
+    const [templateId, setTemplateId] = useState<TemplateId>("collage");
+    const [draft, setDraft] = useState<JournalDraft | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [error, setError] = useState("");
+    const [isErrorAlertOpen, setIsErrorAlertOpen] = useState(false);
+    /** 记录当前错误是否来自 COS 上传失败（用于判断是否显示重试按钮） */
+    const [failedPhotosForRetry, setFailedPhotosForRetry] = useState<PhotoAsset[]>([]);
+    const [isInfoOpen, setIsInfoOpen] = useState(false);
+    const [isPhotoManagerOpen, setIsPhotoManagerOpen] = useState(false);
+    /**
+     * 「手绘中」遮罩的持久挂载状态：
+     *   - isGenerating 为 true 时立即挂载（enter 动画）；
+     *   - isGenerating 变 false 时不立即卸载，给 320ms 让 leave 动画跑完再卸载，
+     *     避免遮罩"啪一下消失"的硬切。
+     */
+    const [overlayMounted, setOverlayMounted] = useState(false);
+    /** Kratos 接口当前重试进度（含首次），用于 DrawingOverlay 显示「第 N 次尝试」。 */
+    const [attemptInfo, setAttemptInfo] = useState<{ attempt: number; total: number } | null>(null);
+    /** 用户在 InfoModal 中为每张照片填写的远程链接（与 photos 对齐的稀疏数组）。 */
+    const [remoteUrls, setRemoteUrls] = useState<string[]>([]);
+    /** VLM 自动识图状态：进行中标志 + 上次错误（便于面板内提示）。 */
+    const [isVisionLoading, setIsVisionLoading] = useState(false);
+    const [visionError, setVisionError] = useState("");
+    const [soundEnabled, setSoundEnabled] = useState(() => getSoundEnabled());
+    const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>(() => getAllTemplates());
+    const [showTemplateManager, setShowTemplateManager] = useState(false);
 
     // 如果正在加载认证状态，显示加载中
     if (authLoading) {
@@ -108,44 +143,150 @@ function App() {
       );
     }
 
-    // 如果未登录或显示认证页面，显示认证页面
+    // 如果未登录或显示认证页面，显示认证页面（使用条件渲染而不是早期返回）
     if (!user || showAuthPage) {
       return <AuthPage onAuthSuccess={() => setShowAuthPage(false)} />;
     }
+    
+    // 只有当用户已登录时才返回 AppContent 组件（这样所有的 hooks 都被执行）
+    return <AppContent 
+      user={user}
+      signOut={signOut}
+      setShowAuthPage={setShowAuthPage}
+      photos={photos}
+      setPhotos={setPhotos}
+      answers={answers}
+      setAnswers={setAnswers}
+      styleId={styleId}
+      setStyleId={setStyleId}
+      templateId={templateId}
+      setTemplateId={setTemplateId}
+      draft={draft}
+      setDraft={setDraft}
+      isProcessing={isProcessing}
+      setIsProcessing={setIsProcessing}
+      isGenerating={isGenerating}
+      setIsGenerating={setIsGenerating}
+      error={error}
+      setError={setError}
+      isErrorAlertOpen={isErrorAlertOpen}
+      setIsErrorAlertOpen={setIsErrorAlertOpen}
+      failedPhotosForRetry={failedPhotosForRetry}
+      setFailedPhotosForRetry={setFailedPhotosForRetry}
+      isInfoOpen={isInfoOpen}
+      setIsInfoOpen={setIsInfoOpen}
+      isPhotoManagerOpen={isPhotoManagerOpen}
+      setIsPhotoManagerOpen={setIsPhotoManagerOpen}
+      overlayMounted={overlayMounted}
+      setOverlayMounted={setOverlayMounted}
+      attemptInfo={attemptInfo}
+      setAttemptInfo={setAttemptInfo}
+      remoteUrls={remoteUrls}
+      setRemoteUrls={setRemoteUrls}
+      isVisionLoading={isVisionLoading}
+      setIsVisionLoading={setIsVisionLoading}
+      visionError={visionError}
+      setVisionError={setVisionError}
+      soundEnabled={soundEnabled}
+      setSoundEnabled={setSoundEnabled}
+      savedTemplates={savedTemplates}
+      setSavedTemplates={setSavedTemplates}
+      showTemplateManager={showTemplateManager}
+      setShowTemplateManager={setShowTemplateManager}
+    />;
+}
 
-    const [photos, setPhotos] = useState<PhotoAsset[]>([]);
-    const [answers, setAnswers] = useState<UserAnswers>(() => ({
-      ...defaultAnswers,
-      customTags: getAllCustomTags(),
-    }));
-    const [styleId, setStyleId] = useState<StyleId>("auto");
-    const [templateId, setTemplateId] = useState<TemplateId>("collage");
-    const [draft, setDraft] = useState<JournalDraft | null>(null);
-    const [isProcessing, setIsProcessing] = useState(false);
-   const [isGenerating, setIsGenerating] = useState(false);
-   const [error, setError] = useState("");
-   const [isErrorAlertOpen, setIsErrorAlertOpen] = useState(false);
-   /** 记录当前错误是否来自 COS 上传失败（用于判断是否显示重试按钮） */
-   const [failedPhotosForRetry, setFailedPhotosForRetry] = useState<PhotoAsset[]>([]);
-  const [isInfoOpen, setIsInfoOpen] = useState(false);
-  const [isPhotoManagerOpen, setIsPhotoManagerOpen] = useState(false);
-  /**
-   * 「手绘中」遮罩的持久挂载状态：
-   *   - isGenerating 为 true 时立即挂载（enter 动画）；
-   *   - isGenerating 变 false 时不立即卸载，给 320ms 让 leave 动画跑完再卸载，
-   *     避免遮罩"啪一下消失"的硬切。
-   */
-  const [overlayMounted, setOverlayMounted] = useState(false);
-  /** Kratos 接口当前重试进度（含首次），用于 DrawingOverlay 显示「第 N 次尝试」。 */
-  const [attemptInfo, setAttemptInfo] = useState<{ attempt: number; total: number } | null>(null);
-  /** 用户在 InfoModal 中为每张照片填写的远程链接（与 photos 对齐的稀疏数组）。 */
-  const [remoteUrls, setRemoteUrls] = useState<string[]>([]);
-  /** VLM 自动识图状态：进行中标志 + 上次错误（便于面板内提示）。 */
-  const [isVisionLoading, setIsVisionLoading] = useState(false);
-  const [visionError, setVisionError] = useState("");
-  const [soundEnabled, setSoundEnabled] = useState(() => getSoundEnabled());
-  const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>(() => getAllTemplates());
-  const [showTemplateManager, setShowTemplateManager] = useState(false);
+type AppContentProps = {
+  user: any;
+  signOut: () => Promise<void>;
+  setShowAuthPage: Dispatch<SetStateAction<boolean>>;
+  photos: PhotoAsset[];
+  setPhotos: Dispatch<SetStateAction<PhotoAsset[]>>;
+  answers: UserAnswers;
+  setAnswers: Dispatch<SetStateAction<UserAnswers>>;
+  styleId: StyleId;
+  setStyleId: Dispatch<SetStateAction<StyleId>>;
+  templateId: TemplateId;
+  setTemplateId: Dispatch<SetStateAction<TemplateId>>;
+  draft: JournalDraft | null;
+  setDraft: Dispatch<SetStateAction<JournalDraft | null>>;
+  isProcessing: boolean;
+  setIsProcessing: Dispatch<SetStateAction<boolean>>;
+  isGenerating: boolean;
+  setIsGenerating: Dispatch<SetStateAction<boolean>>;
+  error: string;
+  setError: Dispatch<SetStateAction<string>>;
+  isErrorAlertOpen: boolean;
+  setIsErrorAlertOpen: Dispatch<SetStateAction<boolean>>;
+  failedPhotosForRetry: PhotoAsset[];
+  setFailedPhotosForRetry: Dispatch<SetStateAction<PhotoAsset[]>>;
+  isInfoOpen: boolean;
+  setIsInfoOpen: Dispatch<SetStateAction<boolean>>;
+  isPhotoManagerOpen: boolean;
+  setIsPhotoManagerOpen: Dispatch<SetStateAction<boolean>>;
+  overlayMounted: boolean;
+  setOverlayMounted: Dispatch<SetStateAction<boolean>>;
+  attemptInfo: { attempt: number; total: number } | null;
+  setAttemptInfo: Dispatch<SetStateAction<{ attempt: number; total: number } | null>>;
+  remoteUrls: string[];
+  setRemoteUrls: Dispatch<SetStateAction<string[]>>;
+  isVisionLoading: boolean;
+  setIsVisionLoading: Dispatch<SetStateAction<boolean>>;
+  visionError: string;
+  setVisionError: Dispatch<SetStateAction<string>>;
+  soundEnabled: boolean;
+  setSoundEnabled: Dispatch<SetStateAction<boolean>>;
+  savedTemplates: SavedTemplate[];
+  setSavedTemplates: Dispatch<SetStateAction<SavedTemplate[]>>;
+  showTemplateManager: boolean;
+  setShowTemplateManager: Dispatch<SetStateAction<boolean>>;
+};
+
+function AppContent({
+  user,
+  signOut,
+  setShowAuthPage,
+  photos,
+  setPhotos,
+  answers,
+  setAnswers,
+  styleId,
+  setStyleId,
+  templateId,
+  setTemplateId,
+  draft,
+  setDraft,
+  isProcessing,
+  setIsProcessing,
+  isGenerating,
+  setIsGenerating,
+  error,
+  setError,
+  isErrorAlertOpen,
+  setIsErrorAlertOpen,
+  failedPhotosForRetry,
+  setFailedPhotosForRetry,
+  isInfoOpen,
+  setIsInfoOpen,
+  isPhotoManagerOpen,
+  setIsPhotoManagerOpen,
+  overlayMounted,
+  setOverlayMounted,
+  attemptInfo,
+  setAttemptInfo,
+  remoteUrls,
+  setRemoteUrls,
+  isVisionLoading,
+  setIsVisionLoading,
+  visionError,
+  setVisionError,
+  soundEnabled,
+  setSoundEnabled,
+  savedTemplates,
+  setSavedTemplates,
+  showTemplateManager,
+  setShowTemplateManager,
+}: AppContentProps) {
 
   const activeStyle = draft?.styleId ?? (styleId === "auto" ? "elegant" : styleId);
   const play = (effect: SoundEffect) => playSound(effect, soundEnabled);
