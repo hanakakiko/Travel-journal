@@ -7,14 +7,11 @@ interface EmailSignUpProps {
 }
 
 export function EmailSignUp({ onSignUpSuccess }: EmailSignUpProps) {
-  const { sendSignUpCode, verifySignUpCode } = useAuth();
+  const { sendEmailSignUpCode, verifyEmailSignUpCode } = useAuth();
   const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [nickname, setNickname] = useState('');
   
-  // 状态管理
   const [step, setStep] = useState<'form' | 'verify'>('form');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +31,6 @@ export function EmailSignUp({ onSignUpSuccess }: EmailSignUpProps) {
     }, 1000);
   };
 
-  // 第一步：校验表单，调用 signUp（同时传入 email + password + nickname），发送验证码
   const handleSendCode = async () => {
     setError(null);
     setSuccess(null);
@@ -43,25 +39,13 @@ export function EmailSignUp({ onSignUpSuccess }: EmailSignUpProps) {
       setError('请输入有效的邮箱地址');
       return;
     }
-    if (!password) {
-      setError('请设置密码');
-      return;
-    }
-    if (password.length < 6) {
-      setError('密码长度至少 6 位');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('两次输入的密码不一致');
-      return;
-    }
 
     setIsLoading(true);
     try {
-      const { error: signUpError } = await sendSignUpCode(email, password, nickname || undefined);
+      const { error: sendError } = await sendEmailSignUpCode(email, nickname || undefined);
 
-      if (signUpError) {
-        setError(signUpError.message || '发送验证码失败，请稍后重试');
+      if (sendError) {
+        setError(sendError.message || '发送验证码失败，请稍后重试');
         return;
       }
 
@@ -73,7 +57,6 @@ export function EmailSignUp({ onSignUpSuccess }: EmailSignUpProps) {
     }
   };
 
-  // 第二步：验证码验证，完成注册
   const handleVerify = async () => {
     setError(null);
     setSuccess(null);
@@ -85,7 +68,7 @@ export function EmailSignUp({ onSignUpSuccess }: EmailSignUpProps) {
 
     setIsLoading(true);
     try {
-      const { error: verifyError } = await verifySignUpCode(verificationCode);
+      const { error: verifyError } = await verifyEmailSignUpCode(verificationCode);
 
       if (verifyError) {
         setError(verifyError.message || '验证失败，请重新输入');
@@ -111,7 +94,6 @@ export function EmailSignUp({ onSignUpSuccess }: EmailSignUpProps) {
         <h2 className="text-2xl font-bold text-gray-800">邮箱注册</h2>
       </div>
 
-      {/* 错误提示 */}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
           <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -119,7 +101,6 @@ export function EmailSignUp({ onSignUpSuccess }: EmailSignUpProps) {
         </div>
       )}
 
-      {/* 成功提示 */}
       {success && (
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
           <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
@@ -127,7 +108,6 @@ export function EmailSignUp({ onSignUpSuccess }: EmailSignUpProps) {
         </div>
       )}
 
-      {/* 第一步：填写注册信息 */}
       {step === 'form' && (
         <div className="space-y-4">
           <div>
@@ -158,37 +138,9 @@ export function EmailSignUp({ onSignUpSuccess }: EmailSignUpProps) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              设置密码
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="至少 6 位"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              确认密码
-            </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="再次输入密码"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-            />
-          </div>
-
           <button
             onClick={handleSendCode}
-            disabled={isLoading || !email || !password || !confirmPassword}
+            disabled={isLoading || !email}
             className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isLoading ? (
@@ -207,7 +159,6 @@ export function EmailSignUp({ onSignUpSuccess }: EmailSignUpProps) {
         </div>
       )}
 
-      {/* 第二步：输入验证码 */}
       {step === 'verify' && (
         <div className="space-y-4">
           <p className="text-sm text-gray-600 text-center">
