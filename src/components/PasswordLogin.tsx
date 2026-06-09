@@ -140,83 +140,76 @@ export function PasswordLogin({ onSignUpClick, onLoginSuccess }: PasswordLoginPr
      <div style={{
        width: '100%',
      }}>
-       {/* 登录方式切换 */}
-       <div className="segmented" style={{
-         display: 'grid',
-         gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-         gap: '10px',
+       {/* 登录方式切换 - 次级 pill 风格 */}
+       <div style={{
+         display: 'flex',
+         alignItems: 'center',
+         gap: '8px',
          marginBottom: '20px',
        }}>
-         <button
-           onClick={() => {
-             setLoginMode('password');
-             setError(null);
-           }}
-           style={{
-             minHeight: '42px',
-             padding: '8px 12px',
-             border: loginMode === 'password' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
-             borderRadius: '14px',
-             background: loginMode === 'password' ? 'var(--ink)' : '#fffaf0',
-             color: loginMode === 'password' ? '#fff7eb' : 'var(--ink)',
-             fontWeight: 900,
-             fontSize: '14px',
-             cursor: 'pointer',
-             display: 'flex',
-             alignItems: 'center',
-             justifyContent: 'center',
-             gap: '6px',
-             transition: 'all 0.2s ease',
-           }}
-           onMouseEnter={(e) => {
-             if (loginMode !== 'password') {
-               e.currentTarget.style.background = '#fff0e0';
-             }
-           }}
-           onMouseLeave={(e) => {
-             if (loginMode !== 'password') {
-               e.currentTarget.style.background = '#fffaf0';
-             }
-           }}
-         >
-           <Lock size={16} />
-           <span>密码登录</span>
-         </button>
-         <button
-           onClick={() => {
-             setLoginMode('email-otp');
-             setError(null);
-           }}
-           style={{
-             minHeight: '42px',
-             padding: '8px 12px',
-             border: loginMode === 'email-otp' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
-             borderRadius: '14px',
-             background: loginMode === 'email-otp' ? 'var(--ink)' : '#fffaf0',
-             color: loginMode === 'email-otp' ? '#fff7eb' : 'var(--ink)',
-             fontWeight: 900,
-             fontSize: '14px',
-             cursor: 'pointer',
-             display: 'flex',
-             alignItems: 'center',
-             justifyContent: 'center',
-             gap: '6px',
-             transition: 'all 0.2s ease',
-           }}
-           onMouseEnter={(e) => {
-             if (loginMode !== 'email-otp') {
-               e.currentTarget.style.background = '#fff0e0';
-             }
-           }}
-           onMouseLeave={(e) => {
-             if (loginMode !== 'email-otp') {
-               e.currentTarget.style.background = '#fffaf0';
-             }
-           }}
-         >
-           <Mail size={16} />
-           <span>验证码</span>
-         </button>
+         <span style={{
+           fontSize: '12px',
+           color: 'rgba(23, 18, 15, 0.45)',
+           fontWeight: 600,
+           whiteSpace: 'nowrap',
+           flexShrink: 0,
+         }}>登录方式</span>
+         <div style={{
+           display: 'flex',
+           background: 'rgba(23, 18, 15, 0.06)',
+           borderRadius: '20px',
+           padding: '3px',
+           gap: '2px',
+         }}>
+           <button
+             onClick={() => {
+               setLoginMode('password');
+               setError(null);
+             }}
+             style={{
+               padding: '5px 14px',
+               border: 'none',
+               borderRadius: '17px',
+               background: loginMode === 'password' ? 'var(--ink)' : 'transparent',
+               color: loginMode === 'password' ? '#ffffff' : 'rgba(23, 18, 15, 0.55)',
+               fontWeight: 700,
+               fontSize: '13px',
+               cursor: 'pointer',
+               display: 'flex',
+               alignItems: 'center',
+               gap: '5px',
+               transition: 'all 0.18s ease',
+               whiteSpace: 'nowrap',
+             }}
+           >
+             <Lock size={13} />
+             <span>密码登录</span>
+           </button>
+           <button
+             onClick={() => {
+               setLoginMode('email-otp');
+               setError(null);
+             }}
+             style={{
+               padding: '5px 14px',
+               border: 'none',
+               borderRadius: '17px',
+               background: loginMode === 'email-otp' ? 'var(--ink)' : 'transparent',
+               color: loginMode === 'email-otp' ? '#ffffff' : 'rgba(23, 18, 15, 0.55)',
+               fontWeight: 700,
+               fontSize: '13px',
+               cursor: 'pointer',
+               display: 'flex',
+               alignItems: 'center',
+               gap: '5px',
+               transition: 'all 0.18s ease',
+               whiteSpace: 'nowrap',
+             }}
+           >
+             <Mail size={13} />
+             <span>邮箱登录</span>
+           </button>
+         </div>
        </div>
 
        {/* 错误提示 */}

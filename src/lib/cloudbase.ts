@@ -16,15 +16,18 @@ const REGION = "ap-shanghai";
 let _app: ReturnType<typeof cloudbase.init> | null = null;
 
 export function getApp() {
-  if (!_app) {
-    _app = cloudbase.init({ 
-      env: ENV_ID,
-      region: REGION,
-      auth: { detectSessionInUrl: true },
-    });
-  }
-  return _app;
-}
+   if (!_app) {
+     _app = cloudbase.init({
+       env: ENV_ID,
+       region: REGION,
+       auth: {
+         detectSessionInUrl: true,
+         persistence: 'local', // 启用本地持久化
+       },
+     });
+   }
+   return _app;
+ }
 
 // ── 认证（匿名登录）────────────────────────────────────────────────────────────
 

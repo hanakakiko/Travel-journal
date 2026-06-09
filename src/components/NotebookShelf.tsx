@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Plus, Trash2, Loader2, ArrowLeft } from "lucide-react";
 import type { JournalNotebook } from "../types";
 import { getAllNotebooks, deleteNotebook } from "../lib/notebookManager";
@@ -13,9 +14,11 @@ import "../styles/notebook-shelf.css";
 
 interface NotebookShelfProps {
   onClose: () => void;
+  navigate?: (path: string) => void;
 }
 
-export function NotebookShelf({ onClose }: NotebookShelfProps) {
+export function NotebookShelf({ onClose, navigate }: NotebookShelfProps) {
+  const location = useLocation();
   const [notebooks, setNotebooks] = useState<JournalNotebook[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +28,20 @@ export function NotebookShelf({ onClose }: NotebookShelfProps) {
   useEffect(() => {
     loadNotebooks();
   }, []);
+
+  // 初始化时，若 URL 已是 /notebook/:id，尝试从列表中找到对应手帐本并选中
+  // 这里只做 URL → state 的单向同步（组件挂载时）
+  // 注意：notebooks 加载完成后才能匹配，所以放在 notebooks 变化的 effect 里处理
+  useEffect(() => {
+    if (!location.pathname.startsWith('/notebook/') || notebooks.length === 0) return;
+    if (selectedNotebook) return; // 已有选中，不重复处理
+
+    const idFromUrl = location.pathname.replace('/notebook/', '');
+    const found = notebooks.find((n) => n.id === idFromUrl);
+    if (found) {
+      setSelectedNotebook(found);
+    }
+  }, [notebooks, location.pathname]);
 
   const loadNotebooks = async () => {
     try {
@@ -81,7 +98,22 @@ export function NotebookShelf({ onClose }: NotebookShelfProps) {
       <div className="notebook-modal-content">
         {/* 头部 */}
         <header className="notebook-header">
-          <button onClick={onClose} className="notebook-back-btn" title="返回">
+          <button
+            onClick={() => {
+              if (selectedNotebook) {
+                // 从手帐本详情返回列表：先清除选中状态，再更新 URL
+                setSelectedNotebook(null);
+                if (navigate) {
+                  navigate('/notebook');
+                }
+              } else {
+                // 从列表返回主页
+                onClose();
+              }
+            }}
+            className="notebook-back-btn"
+            title="返回"
+          >
             <ArrowLeft size={24} />
           </button>
           <h2 className="notebook-title">我的手帐本</h2>
@@ -118,7 +150,12 @@ export function NotebookShelf({ onClose }: NotebookShelfProps) {
                 <div
                   key={notebook.id}
                   className="notebook-card"
-                  onClick={() => setSelectedNotebook(notebook)}
+                  onClick={() => {
+                    setSelectedNotebook(notebook);
+                    if (navigate) {
+                      navigate(`/notebook/${notebook.id}`);
+                    }
+                  }}
                 >
                   {/* 封面 */}
                   <div className="notebook-card-cover">
@@ -161,7 +198,12 @@ export function NotebookShelf({ onClose }: NotebookShelfProps) {
       {selectedNotebook && (
         <NotebookDetailModal
           notebook={selectedNotebook}
-          onClose={() => setSelectedNotebook(null)}
+          onClose={() => {
+            setSelectedNotebook(null);
+            if (navigate) {
+              navigate('/notebook');
+            }
+          }}
           onNotebookUpdated={(updated: JournalNotebook) => {
             setNotebooks(
               notebooks.map((n) => (n.id === updated.id ? updated : n))

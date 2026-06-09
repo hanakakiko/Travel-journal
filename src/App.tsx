@@ -22,7 +22,8 @@ import {
   X,
 } from "lucide-react";
 import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ErrorAlert } from "./lib/ErrorAlert";
 import { ApiConfigPanel } from "./lib/ApiConfigPanel";
 import { useAuth } from "./contexts/AuthContext";
@@ -43,7 +44,7 @@ import {
   type SceneDetailField,
 } from "./data/presets";
 import { processImageFile } from "./lib/imageTools";
-import { buildKratosPrompt, requestJournalDraft } from "./lib/modelClient";
+import { buildKratosPrompt, requestJournalDraft, generateRandomVisualFlavor } from "./lib/modelClient";
 import { createSampleFiles } from "./lib/samplePhotos";
 import { playSound, type SoundEffect } from "./lib/soundEffects";
 import { recognizePhotoBatch } from "./lib/visionClient";
@@ -53,8 +54,10 @@ import { getAllTemplates, getAllTemplatesAsync, saveTemplate, deleteTemplate } f
 import { ensureAnonymousLogin } from "./lib/cloudbase";
 import { initializeUserSettings, getSoundEnabled, saveSoundEnabled } from "./lib/userSettings";
 import { EditableTagGroup } from "./components/EditableTagGroup";
+import { FormConfigPage } from "./components/FormConfigPage";
 import { NotebookShelf } from "./components/NotebookShelf";
 import { SaveToNotebookModal } from "./components/SaveToNotebookModal";
+import { RestoreDeletedOptionsModal } from "./components/RestoreDeletedOptionsModal";
 import { addTag, removeTag } from "./lib/tagManager";
 import { getAllCustomTags, saveCustomTags } from "./lib/customTagsStorage";
 import { saveFormDraft, loadFormDraft, clearFormDraft, hasFormDraft } from "./lib/formDraftStorage";
@@ -99,9 +102,22 @@ const downloadDataUrl = (dataUrl: string, filename: string) => {
 };
 
 function App() {
+    // 路由导航
+    const navigate = useNavigate();
+    const location = useLocation();
+    
     // 认证管理
     const { user, isLoading: authLoading, signOut } = useAuth();
-    const [showAuthPage, setShowAuthPage] = useState(!user);
+    const [showAuthPage, setShowAuthPage] = useState(true); // 初始显示登录页面
+    
+    // 当 user 状态变化时，自动更新 showAuthPage
+    useEffect(() => {
+      if (user) {
+        setShowAuthPage(false); // 用户已登录，显示主应用
+      } else {
+        setShowAuthPage(true); // 用户未登录，显示登录页面
+      }
+    }, [user]);
     
     // 必须在条件语句之前声明所有 hooks
     // 初始化时尝试从草稿恢复，如果没有草稿则使用默认值
@@ -141,12 +157,12 @@ function App() {
     const [isVisionLoading, setIsVisionLoading] = useState(false);
     const [visionError, setVisionError] = useState("");
     const [soundEnabled, setSoundEnabled] = useState(() => getSoundEnabled());
-     const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>(() => getAllTemplates());
-     const [showTemplateManager, setShowTemplateManager] = useState(false);
-     // 显示草稿恢复提示（仅在有草稿且是新的会话时显示）
-     const [showDraftRecoveryTip, setShowDraftRecoveryTip] = useState(!!formDraft && formDraft.photos.length > 0);
+    const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>(() => getAllTemplates());
+    const [showTemplateManager, setShowTemplateManager] = useState(false);
+    // 显示草稿恢复提示（仅在有草稿且是新的会话时显示）
+    const [showDraftRecoveryTip, setShowDraftRecoveryTip] = useState(!!formDraft && formDraft.photos.length > 0);
 
-    // 如果正在加载认证状态，显示加载中
+   // 如果正在加载认证状态，显示加载中
     if (authLoading) {
       return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -164,7 +180,9 @@ function App() {
     }
     
     // 只有当用户已登录时才返回 AppContent 组件（这样所有的 hooks 都被执行）
-    return <AppContent 
+    return <AppContent
+      navigate={navigate}
+      location={location}
       user={user}
       signOut={signOut}
       setShowAuthPage={setShowAuthPage}
@@ -208,120 +226,140 @@ function App() {
       setSavedTemplates={setSavedTemplates}
       showTemplateManager={showTemplateManager}
       setShowTemplateManager={setShowTemplateManager}
+      showDraftRecoveryTip={showDraftRecoveryTip}
+      setShowDraftRecoveryTip={setShowDraftRecoveryTip}
     />;
 }
 
 type AppContentProps = {
-  user: any;
-  signOut: () => Promise<void>;
-  setShowAuthPage: Dispatch<SetStateAction<boolean>>;
-  photos: PhotoAsset[];
-  setPhotos: Dispatch<SetStateAction<PhotoAsset[]>>;
-  answers: UserAnswers;
-  setAnswers: Dispatch<SetStateAction<UserAnswers>>;
-  styleId: StyleId;
-  setStyleId: Dispatch<SetStateAction<StyleId>>;
-  templateId: TemplateId;
-  setTemplateId: Dispatch<SetStateAction<TemplateId>>;
-  draft: JournalDraft | null;
-  setDraft: Dispatch<SetStateAction<JournalDraft | null>>;
-  isProcessing: boolean;
-  setIsProcessing: Dispatch<SetStateAction<boolean>>;
-  isGenerating: boolean;
-  setIsGenerating: Dispatch<SetStateAction<boolean>>;
-  error: string;
-  setError: Dispatch<SetStateAction<string>>;
-  isErrorAlertOpen: boolean;
-  setIsErrorAlertOpen: Dispatch<SetStateAction<boolean>>;
-  failedPhotosForRetry: PhotoAsset[];
-  setFailedPhotosForRetry: Dispatch<SetStateAction<PhotoAsset[]>>;
-  isInfoOpen: boolean;
-  setIsInfoOpen: Dispatch<SetStateAction<boolean>>;
-  isPhotoManagerOpen: boolean;
-  setIsPhotoManagerOpen: Dispatch<SetStateAction<boolean>>;
-  overlayMounted: boolean;
-  setOverlayMounted: Dispatch<SetStateAction<boolean>>;
-  attemptInfo: { attempt: number; total: number } | null;
-  setAttemptInfo: Dispatch<SetStateAction<{ attempt: number; total: number } | null>>;
-  remoteUrls: string[];
-  setRemoteUrls: Dispatch<SetStateAction<string[]>>;
-  isVisionLoading: boolean;
-  setIsVisionLoading: Dispatch<SetStateAction<boolean>>;
-  visionError: string;
-  setVisionError: Dispatch<SetStateAction<string>>;
-  soundEnabled: boolean;
-  setSoundEnabled: Dispatch<SetStateAction<boolean>>;
-  savedTemplates: SavedTemplate[];
-  setSavedTemplates: Dispatch<SetStateAction<SavedTemplate[]>>;
-  showTemplateManager: boolean;
-  setShowTemplateManager: Dispatch<SetStateAction<boolean>>;
+   navigate: any;
+   location: any;
+   user: any;
+   signOut: () => Promise<void>;
+   setShowAuthPage: Dispatch<SetStateAction<boolean>>;
+   photos: PhotoAsset[];
+   setPhotos: Dispatch<SetStateAction<PhotoAsset[]>>;
+   answers: UserAnswers;
+   setAnswers: Dispatch<SetStateAction<UserAnswers>>;
+   styleId: StyleId;
+   setStyleId: Dispatch<SetStateAction<StyleId>>;
+   templateId: TemplateId;
+   setTemplateId: Dispatch<SetStateAction<TemplateId>>;
+   draft: JournalDraft | null;
+   setDraft: Dispatch<SetStateAction<JournalDraft | null>>;
+   isProcessing: boolean;
+   setIsProcessing: Dispatch<SetStateAction<boolean>>;
+   isGenerating: boolean;
+   setIsGenerating: Dispatch<SetStateAction<boolean>>;
+   error: string;
+   setError: Dispatch<SetStateAction<string>>;
+   isErrorAlertOpen: boolean;
+   setIsErrorAlertOpen: Dispatch<SetStateAction<boolean>>;
+   failedPhotosForRetry: PhotoAsset[];
+   setFailedPhotosForRetry: Dispatch<SetStateAction<PhotoAsset[]>>;
+   isInfoOpen: boolean;
+   setIsInfoOpen: Dispatch<SetStateAction<boolean>>;
+   isPhotoManagerOpen: boolean;
+   setIsPhotoManagerOpen: Dispatch<SetStateAction<boolean>>;
+   overlayMounted: boolean;
+   setOverlayMounted: Dispatch<SetStateAction<boolean>>;
+   attemptInfo: { attempt: number; total: number } | null;
+   setAttemptInfo: Dispatch<SetStateAction<{ attempt: number; total: number } | null>>;
+   remoteUrls: string[];
+   setRemoteUrls: Dispatch<SetStateAction<string[]>>;
+   isVisionLoading: boolean;
+   setIsVisionLoading: Dispatch<SetStateAction<boolean>>;
+   visionError: string;
+   setVisionError: Dispatch<SetStateAction<string>>;
+   soundEnabled: boolean;
+   setSoundEnabled: Dispatch<SetStateAction<boolean>>;
+   savedTemplates: SavedTemplate[];
+   setSavedTemplates: Dispatch<SetStateAction<SavedTemplate[]>>;
+   showTemplateManager: boolean;
+   setShowTemplateManager: Dispatch<SetStateAction<boolean>>;
+   showDraftRecoveryTip: boolean;
+   setShowDraftRecoveryTip: Dispatch<SetStateAction<boolean>>;
 };
 
 function AppContent({
-  user,
-  signOut,
-  setShowAuthPage,
-  photos,
-  setPhotos,
-  answers,
-  setAnswers,
-  styleId,
-  setStyleId,
-  templateId,
-  setTemplateId,
-  draft,
-  setDraft,
-  isProcessing,
-  setIsProcessing,
-  isGenerating,
-  setIsGenerating,
-  error,
-  setError,
-  isErrorAlertOpen,
-  setIsErrorAlertOpen,
-  failedPhotosForRetry,
-  setFailedPhotosForRetry,
-  isInfoOpen,
-  setIsInfoOpen,
-  isPhotoManagerOpen,
-  setIsPhotoManagerOpen,
-  overlayMounted,
-  setOverlayMounted,
-  attemptInfo,
-  setAttemptInfo,
-  remoteUrls,
-  setRemoteUrls,
-  isVisionLoading,
-  setIsVisionLoading,
-  visionError,
-  setVisionError,
-  soundEnabled,
-  setSoundEnabled,
-  savedTemplates,
-  setSavedTemplates,
-  showTemplateManager,
-  setShowTemplateManager,
+   navigate,
+   location,
+   user,
+   signOut,
+   setShowAuthPage,
+   photos,
+   setPhotos,
+   answers,
+   setAnswers,
+   styleId,
+   setStyleId,
+   templateId,
+   setTemplateId,
+   draft,
+   setDraft,
+   isProcessing,
+   setIsProcessing,
+   isGenerating,
+   setIsGenerating,
+   error,
+   setError,
+   isErrorAlertOpen,
+   setIsErrorAlertOpen,
+   failedPhotosForRetry,
+   setFailedPhotosForRetry,
+   isInfoOpen,
+   setIsInfoOpen,
+   isPhotoManagerOpen,
+   setIsPhotoManagerOpen,
+   overlayMounted,
+   setOverlayMounted,
+   attemptInfo,
+   setAttemptInfo,
+   remoteUrls,
+   setRemoteUrls,
+   isVisionLoading,
+   setIsVisionLoading,
+   visionError,
+   setVisionError,
+   soundEnabled,
+   setSoundEnabled,
+   savedTemplates,
+   setSavedTemplates,
+   showTemplateManager,
+   setShowTemplateManager,
+   showDraftRecoveryTip,
+   setShowDraftRecoveryTip,
 }: AppContentProps) {
 
-  // 检查是否有已恢复的草稿
-  const hasDraftContent = photos.length > 0;
-  const [showDraftRecoveryTip, setShowDraftRecoveryTip] = useState(true);
-  const [draftWasRecovered] = useState(hasFormDraft() && hasDraftContent);
+   // 检查是否有已恢复的草稿
+   const hasDraftContent = photos.length > 0;
+   const [draftWasRecovered] = useState(hasFormDraft() && hasDraftContent);
 
   // 手帐本功能相关状态
-  const [showNotebookShelf, setShowNotebookShelf] = useState(false);
   const [showSaveToNotebook, setShowSaveToNotebook] = useState(false);
   const [showRewardDownload, setShowRewardDownload] = useState(false);
 
+  // 恢复已删除选项的弹窗状态
+  const [showRestoreDeletedOptions, setShowRestoreDeletedOptions] = useState(false);
+  const [deletedOptionsToRestore, setDeletedOptionsToRestore] = useState<Record<string, string[]>>({});
+  const [pendingTemplate, setPendingTemplate] = useState<SavedTemplate | null>(null);
+
   const activeStyle = draft?.styleId ?? (styleId === "auto" ? "elegant" : styleId);
-  const play = (effect: SoundEffect) => playSound(effect, soundEnabled);
+  const play = useCallback((effect: SoundEffect) => playSound(effect, soundEnabled), [soundEnabled]);
 
   // 清除所有表单数据和草稿
   const clearAllFormData = () => {
     if (window.confirm("确定要清空所有数据吗？这将删除所有已上传的照片和填写内容。")) {
       clearFormDraft();
       setPhotos([]);
-      setAnswers(defaultAnswers);
+      
+      // 重置为默认答案，但保留用户维度的自定义选项
+      const userCustomTags = getAllCustomTags();
+      setAnswers({
+        ...defaultAnswers,
+        customTags: userCustomTags,
+      });
+      
       setStyleId("auto");
       setTemplateId("collage");
       setDraft(null);
@@ -338,15 +376,77 @@ function AppContent({
   };
 
   const handleApplyTemplate = (template: SavedTemplate) => {
-    setAnswers(template.answers);
+    // 获取用户维度保存的自定义选项
+    const userCustomTags = getAllCustomTags();
+    
+    // 检测模板中是否有已删除的选项
+    const deletedOptions: Record<string, string[]> = {};
+    if (template.answers.customTags) {
+      Object.entries(template.answers.customTags).forEach(([fieldKey, templateTags]) => {
+        const userTags = userCustomTags[fieldKey] ?? [];
+        const deleted = templateTags.filter((tag) => !userTags.includes(tag));
+        if (deleted.length > 0) {
+          deletedOptions[fieldKey] = deleted;
+        }
+      });
+    }
+    
+    // 如果有已删除的选项，显示恢复弹窗
+    if (Object.keys(deletedOptions).length > 0) {
+      setDeletedOptionsToRestore(deletedOptions);
+      setPendingTemplate(template);
+      setShowRestoreDeletedOptions(true);
+      play("tap");
+      return;
+    }
+    
+    // 没有已删除的选项，直接应用模板
+    applyTemplateDirectly(template);
+  };
+
+  // 直接应用模板（不检测已删除选项）
+  const applyTemplateDirectly = (template: SavedTemplate) => {
+    // 获取用户维度保存的自定义选项
+    const userCustomTags = getAllCustomTags();
+    
+    // 合并模板中的自定义选项和用户维度的自定义选项
+    // 模板中有但用户维度没有的选项也会显示，但不会保存到用户维度
+    const mergedCustomTags: Record<string, string[]> = {};
+    
+    // 先加入用户维度的选项
+    Object.entries(userCustomTags).forEach(([fieldKey, tags]) => {
+      mergedCustomTags[fieldKey] = [...tags];
+    });
+    
+    // 再加入模板中有但用户维度没有的选项
+    if (template.answers.customTags) {
+      Object.entries(template.answers.customTags).forEach(([fieldKey, templateTags]) => {
+        if (!mergedCustomTags[fieldKey]) {
+          // 用户维度没有这个字段，从模板中添加
+          mergedCustomTags[fieldKey] = [...templateTags];
+        } else {
+          // 用户维度有这个字段，添加模板中有但用户维度没有的选项
+          const userTags = mergedCustomTags[fieldKey];
+          templateTags.forEach((tag) => {
+            if (!userTags.includes(tag)) {
+              userTags.push(tag);
+            }
+          });
+        }
+      });
+    }
+    
+    // 应用模板，使用合并后的自定义选项
+    setAnswers({
+      ...template.answers,
+      customTags: mergedCustomTags,
+    });
     setStyleId(template.styleId);
     setTemplateId(template.templateId);
     setDraft(null);
     
-    // 恢复模板中的自定义标签到 localStorage
-    if (template.answers.customTags) {
-      saveCustomTags(template.answers.customTags);
-    }
+    // 重要：不保存合并后的选项到用户维度
+    // 用户维度的自定义选项保持不变
     
     play("tap");
   };
@@ -354,6 +454,48 @@ function AppContent({
   const handleDeleteTemplate = (templateId: string) => {
     deleteTemplate(templateId);
     setSavedTemplates((current) => current.filter((t) => t.id !== templateId));
+    play("tap");
+  };
+
+  // 处理恢复已删除选项
+  const handleRestoreDeletedOptions = () => {
+    if (!pendingTemplate) return;
+    
+    // 获取当前用户维度的自定义选项
+    const userCustomTags = getAllCustomTags();
+    
+    // 合并已删除的选项到用户维度
+    const updatedCustomTags = { ...userCustomTags };
+    Object.entries(deletedOptionsToRestore).forEach(([fieldKey, deletedOptions]) => {
+      const currentTags = updatedCustomTags[fieldKey] ?? [];
+      deletedOptions.forEach((tag) => {
+        if (!currentTags.includes(tag)) {
+          currentTags.push(tag);
+        }
+      });
+      updatedCustomTags[fieldKey] = currentTags;
+    });
+    
+    // 保存到云端
+    saveCustomTags(updatedCustomTags);
+    
+    // 关闭弹窗并应用模板
+    setShowRestoreDeletedOptions(false);
+    setDeletedOptionsToRestore({});
+    applyTemplateDirectly(pendingTemplate);
+    setPendingTemplate(null);
+    play("success");
+  };
+
+  // 处理拒绝恢复已删除选项
+  const handleRejectRestoreDeletedOptions = () => {
+    if (!pendingTemplate) return;
+    
+    // 直接应用模板，不恢复已删除的选项
+    setShowRestoreDeletedOptions(false);
+    setDeletedOptionsToRestore({});
+    applyTemplateDirectly(pendingTemplate);
+    setPendingTemplate(null);
     play("tap");
   };
 
@@ -374,6 +516,27 @@ function AppContent({
         // 网络失败时沿用本地缓存，静默处理
       });
   }, []);
+
+  // 监听用户变化：当用户登录/切换账号时，重新拉取云端数据
+  useEffect(() => {
+    if (!user) return;
+    
+    // 用户已登录，从云端拉取最新的设置和模板
+    void Promise.all([
+      initializeUserSettings(),
+      getAllTemplatesAsync(),
+    ])
+      .then(([_, cloudTemplates]) => {
+        if (cloudTemplates.length > 0) {
+          setSavedTemplates(cloudTemplates);
+        }
+        console.log('[App] Successfully synced user data after login');
+      })
+      .catch((err) => {
+        console.warn('[App] Failed to sync user data after login:', err);
+        // 不阻断 UI，静默处理
+      });
+  }, [user?.id]); // 仅当用户 ID 变化时触发
 
   // 监听 localStorage 变化（跨 Tab 同步），确保模板列表始终同步
   useEffect(() => {
@@ -700,6 +863,30 @@ function AppContent({
       return;
     }
 
+    // 表单验证：检查必选项
+    const validationErrors: string[] = [];
+    
+    // 检查必选项：场景
+    if (!answers.scene) {
+      validationErrors.push("请选择场景");
+    }
+    
+    // 检查必选项：情绪
+    if (!answers.mood || answers.mood.length === 0) {
+      validationErrors.push("请选择情绪");
+    }
+    
+    // 检查必选项：叙述方式
+    if (!answers.narrator) {
+      validationErrors.push("请选择叙述方式");
+    }
+    
+    if (validationErrors.length > 0) {
+      setError(validationErrors.join("\n"));
+      setIsErrorAlertOpen(true);
+      return;
+    }
+
     // 检查是否有可用的生成模型
     const availableModels = getAvailableModels();
     if (availableModels.length === 0) {
@@ -787,6 +974,15 @@ function AppContent({
     void performGeneratedImageDownload();
   };
 
+  // 根据路由路径显示对应的页面（所有 hooks 都已调用）
+  if (location.pathname === '/form-config') {
+    return <FormConfigPage onBack={() => navigate('/')} onSound={play} />;
+  }
+
+  if (location.pathname === '/notebook' || location.pathname.startsWith('/notebook/')) {
+    return <NotebookShelf onClose={() => navigate('/')} navigate={navigate} />;
+  }
+
   return (
     <main className={classNames("app", draft ? "has-draft" : false, `style-${activeStyle}`, `template-${templateId}`)}>
       {/* 用户信息栏 */}
@@ -806,39 +1002,67 @@ function AppContent({
           </span>
          </div>
          <div style={{ display: 'flex', gap: '0.5em' }}>
-           <button
-             onClick={() => setShowNotebookShelf(true)}
-             style={{
-               display: 'flex',
-               alignItems: 'center',
-               gap: '0.35em',
-               padding: '0.4em 0.8em',
-               backgroundColor: '#f5f5f5',
-               border: '1px solid #ddd',
-               borderRadius: '0.35em',
-               cursor: 'pointer',
-               fontSize: '0.85em',
-               color: '#666',
-               transition: 'all 0.2s',
-             }}
-             onMouseEnter={(e) => {
-               e.currentTarget.style.backgroundColor = '#efefef';
-               e.currentTarget.style.borderColor = '#ccc';
-             }}
-             onMouseLeave={(e) => {
-               e.currentTarget.style.backgroundColor = '#f5f5f5';
-               e.currentTarget.style.borderColor = '#ddd';
-             }}
-             title="查看和管理我的手帐本"
-           >
-             <BookOpen size={14} />
-             <span>我的手帐本</span>
-           </button>
-           <button
-             onClick={async () => {
-               await signOut();
-               setShowAuthPage(true);
-             }}
+          <button
+            onClick={() => navigate('/form-config')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35em',
+              padding: '0.4em 0.8em',
+              backgroundColor: '#f5f5f5',
+              border: '1px solid #ddd',
+              borderRadius: '0.35em',
+              cursor: 'pointer',
+              fontSize: '0.85em',
+              color: '#666',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#efefef';
+              e.currentTarget.style.borderColor = '#ccc';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#f5f5f5';
+              e.currentTarget.style.borderColor = '#ddd';
+            }}
+            title="管理表单选项"
+          >
+            <Tag size={14} />
+            <span>表单配置</span>
+          </button>
+          <button
+            onClick={() => navigate('/notebook')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35em',
+              padding: '0.4em 0.8em',
+              backgroundColor: '#f5f5f5',
+              border: '1px solid #ddd',
+              borderRadius: '0.35em',
+              cursor: 'pointer',
+              fontSize: '0.85em',
+              color: '#666',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#efefef';
+              e.currentTarget.style.borderColor = '#ccc';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#f5f5f5';
+              e.currentTarget.style.borderColor = '#ddd';
+            }}
+            title="查看和管理我的手帐本"
+          >
+            <BookOpen size={14} />
+            <span>我的手帐本</span>
+          </button>
+          <button
+            onClick={async () => {
+              await signOut();
+              setShowAuthPage(true);
+            }}
              style={{
                display: 'flex',
                alignItems: 'center',
@@ -1123,8 +1347,6 @@ function AppContent({
           onApplyTemplate={handleApplyTemplate}
           onDeleteTemplate={handleDeleteTemplate}
           onToggleTemplateManager={() => setShowTemplateManager(!showTemplateManager)}
-          onAddCustomTag={handleAddCustomTag}
-          onRemoveCustomTag={handleRemoveCustomTag}
         />
       )}
 
@@ -1166,11 +1388,6 @@ function AppContent({
         />
       )}
 
-      {/* 手帐展示架弹窗 */}
-      {showNotebookShelf && (
-        <NotebookShelf onClose={() => setShowNotebookShelf(false)} />
-      )}
-
       {/* 保存到手帐本弹窗 */}
       {showSaveToNotebook && draft?.generatedImageUrl && (
         <SaveToNotebookModal
@@ -1180,6 +1397,15 @@ function AppContent({
           onSuccess={() => {
             play("success");
           }}
+        />
+      )}
+
+      {/* 恢复已删除选项的弹窗 */}
+      {showRestoreDeletedOptions && Object.keys(deletedOptionsToRestore).length > 0 && (
+        <RestoreDeletedOptionsModal
+          deletedOptions={deletedOptionsToRestore}
+          onRestore={handleRestoreDeletedOptions}
+          onReject={handleRejectRestoreDeletedOptions}
         />
       )}
     </main>
@@ -1460,8 +1686,6 @@ function InfoModal({
    onApplyTemplate,
    onDeleteTemplate,
    onToggleTemplateManager,
-   onAddCustomTag,
-   onRemoveCustomTag,
 }: {
    answers: UserAnswers;
    draft: JournalDraft | null;
@@ -1490,8 +1714,6 @@ function InfoModal({
    onApplyTemplate: (template: SavedTemplate) => void;
    onDeleteTemplate: (templateId: string) => void;
    onToggleTemplateManager: () => void;
-   onAddCustomTag: (fieldKey: string, newTag: string) => void;
-   onRemoveCustomTag: (fieldKey: string, tag: string, defaultTags: string[]) => void;
 }) {
    const [showTemplateSelection, setShowTemplateSelection] = useState(() => savedTemplates.length > 0);
    const [selectedTemplateDetail, setSelectedTemplateDetail] = useState<SavedTemplate | null>(null);
@@ -1838,10 +2060,9 @@ function InfoModal({
               defaultTags={moodOptions}
               customTags={answers.customTags?.mood}
               selectedTags={answers.mood}
-              onAddTag={(newTag) => onAddCustomTag("mood", newTag)}
-              onRemoveTag={(tag) => onRemoveCustomTag("mood", tag, moodOptions)}
               onToggleTag={(tag) => onToggleMood(tag)}
               onSound={onSound}
+              readOnly={true}
             />
 
             <QuestionGroup title="叙述方式">
@@ -1903,8 +2124,6 @@ function InfoModal({
             onSetSingleChoice={onSetSingleChoice}
             onSetAnswers={onSetAnswers}
             onSound={onSound}
-            onAddCustomTag={onAddCustomTag}
-            onRemoveCustomTag={onRemoveCustomTag}
           />
 
           <section className="control-band modal-panel">
@@ -2370,22 +2589,18 @@ function SceneDetailControl({
  * 所有项都用 chip 选择，最大化降低用户输入成本。
  */
 function VisualFlavorPanel({
-    answers,
-    onToggleAnswerList,
-    onSetSingleChoice,
-    onSetAnswers,
-    onSound,
-    onAddCustomTag,
-    onRemoveCustomTag,
-  }: {
-    answers: UserAnswers;
-    onToggleAnswerList: (key: "vibes" | "layoutShapes" | "edgeStyles" | "decorations", value: string) => void;
-    onSetSingleChoice: (key: "palette" | "paperTexture", value: string) => void;
-    onSetAnswers: Dispatch<SetStateAction<UserAnswers>>;
-    onSound: (effect: SoundEffect) => void;
-    onAddCustomTag: (fieldKey: string, newTag: string) => void;
-    onRemoveCustomTag: (fieldKey: string, tag: string, defaultTags: string[]) => void;
-  }) {
+     answers,
+     onToggleAnswerList,
+     onSetSingleChoice,
+     onSetAnswers,
+     onSound,
+   }: {
+     answers: UserAnswers;
+     onToggleAnswerList: (key: "vibes" | "layoutShapes" | "edgeStyles" | "decorations", value: string) => void;
+     onSetSingleChoice: (key: "palette" | "paperTexture", value: string) => void;
+     onSetAnswers: Dispatch<SetStateAction<UserAnswers>>;
+     onSound: (effect: SoundEffect) => void;
+   }) {
    // 获取各字段的默认标签
    const layoutShapeLabels = layoutShapeOptions.map((opt) => opt.label);
    const edgeStyleLabels = edgeStyleOptions.map((opt) => opt.label);
@@ -2393,13 +2608,38 @@ function VisualFlavorPanel({
   return (
     <section className="visual-flavor-panel modal-panel">
       <div className="visual-flavor-head">
-        <p className="visual-flavor-title">
-          <Sparkles size={15} />
-          视觉风味（全部可选 · 全部 chip 选择）
-        </p>
-        <small className="visual-flavor-hint">
-          色调 / 氛围 / 排版形状 / 装饰元素 / 底图纸张——你选什么，画就长什么样。
-        </small>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1em" }}>
+          <div>
+            <p className="visual-flavor-title">
+              <Sparkles size={15} />
+              视觉风味（全部可选 · 全部 chip 选择）
+            </p>
+            <small className="visual-flavor-hint">
+              色调 / 氛围 / 排版形状 / 装饰元素 / 底图纸张——你选什么，画就长什么样。
+            </small>
+          </div>
+          <button
+            type="button"
+            className="btn-random-flavor"
+            title="随机生成所有视觉风味偏好（文字部分保持不变）"
+            onClick={() => {
+              onSound("tap");
+              const randomFlavor = generateRandomVisualFlavor(answers);
+              onSetAnswers((current) => ({
+                ...current,
+                ...randomFlavor,
+              }));
+            }}
+            style={{
+              padding: "0.5em 1em",
+              fontSize: "0.9em",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            🎲 随机选择
+          </button>
+        </div>
       </div>
 
       <FlavorGroup title="色调（单选）">
@@ -2425,10 +2665,9 @@ function VisualFlavorPanel({
         defaultTags={vibeOptions}
         customTags={answers.customTags?.vibes}
         selectedTags={answers.vibes}
-        onAddTag={(newTag) => onAddCustomTag("vibes", newTag)}
-        onRemoveTag={(tag) => onRemoveCustomTag("vibes", tag, vibeOptions)}
         onToggleTag={(tag) => onToggleAnswerList("vibes", tag)}
         onSound={onSound}
+        readOnly={true}
       />
 
       <EditableTagGroup
@@ -2436,10 +2675,9 @@ function VisualFlavorPanel({
         defaultTags={layoutShapeLabels}
         customTags={answers.customTags?.layoutShapes}
         selectedTags={answers.layoutShapes}
-        onAddTag={(newTag) => onAddCustomTag("layoutShapes", newTag)}
-        onRemoveTag={(tag) => onRemoveCustomTag("layoutShapes", tag, layoutShapeLabels)}
         onToggleTag={(tag) => onToggleAnswerList("layoutShapes", tag)}
         onSound={onSound}
+        readOnly={true}
       />
 
       <EditableTagGroup
@@ -2447,10 +2685,9 @@ function VisualFlavorPanel({
         defaultTags={edgeStyleLabels}
         customTags={answers.customTags?.edgeStyles}
         selectedTags={answers.edgeStyles}
-        onAddTag={(newTag) => onAddCustomTag("edgeStyles", newTag)}
-        onRemoveTag={(tag) => onRemoveCustomTag("edgeStyles", tag, edgeStyleLabels)}
         onToggleTag={(tag) => onToggleAnswerList("edgeStyles", tag)}
         onSound={onSound}
+        readOnly={true}
       />
 
       <EditableTagGroup
@@ -2458,10 +2695,9 @@ function VisualFlavorPanel({
         defaultTags={decorationLabels}
         customTags={answers.customTags?.decorations}
         selectedTags={answers.decorations}
-        onAddTag={(newTag) => onAddCustomTag("decorations", newTag)}
-        onRemoveTag={(tag) => onRemoveCustomTag("decorations", tag, decorationLabels)}
         onToggleTag={(tag) => onToggleAnswerList("decorations", tag)}
         onSound={onSound}
+        readOnly={true}
       />
 
       <FlavorGroup title="底图纸张（单选）">

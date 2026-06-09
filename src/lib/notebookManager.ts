@@ -437,7 +437,11 @@ export async function addPageToNotebook(
 }
 
 /**
- * 获取手帐本中的所有页面
+ * 获取手帐本中的所有页面（优化的分批查询）
+ * 当页面数量较多时，一次性查询可能导致返回体超过数据库限制
+ * 此函数使用优化的分批查询方式：
+ * 1. 首先尝试一次性查询（如果成功则直接返回）
+ * 2. 如果失败，使用分批查询（并行查询以提高性能）
  */
 export async function getPagesByNotebook(notebookId: string): Promise<JournalPageEntry[]> {
   await ensureAnonymousLogin();
@@ -446,37 +450,119 @@ export async function getPagesByNotebook(notebookId: string): Promise<JournalPag
 
   const db = getDb();
   
-  // 为了兼容性，先尝试带 orderBy，如果失败则回退到不带 orderBy
-  let result: any;
+  // 策略 1：首先尝试一次性查询（大多数情况下会成功）
   try {
-    result = await db
+    console.log(`[getPagesByNotebook] 尝试一次性查询手帐本 ${notebookId} 的所有页面`);
+    const result = await db
       .collection(PAGES_COLLECTION)
       .where({ notebookId, userId })
       .orderBy("order", "asc")
       .get();
-  } catch (orderByError) {
-    console.warn("[getPagesByNotebook] orderBy 查询失败，尝试不带 orderBy:", orderByError);
-    // 回退方案：不使用 orderBy，在客户端排序
-    result = await db
-      .collection(PAGES_COLLECTION)
-      .where({ notebookId, userId })
-      .get();
-    
-    // 客户端排序
-    if (Array.isArray(result?.data)) {
-      result.data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+
+    if (isSuccess(result)) {
+      const pages = Array.isArray(result.data) ? result.data : [];
+      console.log(`[getPagesByNotebook] 一次性查询成功，获取 ${pages.length} 个页面`);
+      return pages;
     }
+  } catch (singleQueryError) {
+    console.warn(`[getPagesByNotebook] 一次性查询失败，切换到分批查询模式:`, singleQueryError);
   }
 
-  if (!isSuccess(result)) {
-    throw new Error(`获取页面列表失败: ${(result as any)?.message || JSON.stringify(result)}`);
+  // 策略 2：一次性查询失败，使用分批查询（并行查询以提高性能）
+  const BATCH_SIZE = 10; // 增大批大小以减少查询次数
+  
+  // 首先获取总页数
+  const countResult = await db
+    .collection(PAGES_COLLECTION)
+    .where({ notebookId, userId })
+    .count();
+
+  if (!isSuccess(countResult)) {
+    throw new Error(`获取页面总数失败: ${(countResult as any)?.message || JSON.stringify(countResult)}`);
   }
 
-  return Array.isArray(result.data) ? result.data : [];
+  const totalPages = countResult.total || 0;
+  console.log(`[getPagesByNotebook] 手帐本 ${notebookId} 共有 ${totalPages} 个页面，将分 ${Math.ceil(totalPages / BATCH_SIZE)} 批查询`);
+
+  if (totalPages === 0) {
+    return [];
+  }
+
+  // 计算所有批次的查询
+  const batchCount = Math.ceil(totalPages / BATCH_SIZE);
+  const batchQueries: Promise<StoredJournalPageEntry[]>[] = [];
+
+  for (let batch = 0; batch < batchCount; batch++) {
+    const skip = batch * BATCH_SIZE;
+    
+    // 创建查询 Promise，但不立即等待（并行查询）
+    const batchQuery = (async () => {
+      console.log(`[getPagesByNotebook] 查询第 ${batch + 1}/${batchCount} 批（跳过 ${skip} 条，查询 ${BATCH_SIZE} 条）`);
+
+      let result: any;
+      try {
+        // 尝试使用 orderBy + skip + limit 的方式查询
+        result = await db
+          .collection(PAGES_COLLECTION)
+          .where({ notebookId, userId })
+          .orderBy("order", "asc")
+          .skip(skip)
+          .limit(BATCH_SIZE)
+          .get();
+      } catch (orderByError) {
+        console.warn(`[getPagesByNotebook] 第 ${batch + 1} 批 orderBy 查询失败，尝试不带 orderBy`);
+        
+        // 回退方案：不使用 orderBy
+        try {
+          result = await db
+            .collection(PAGES_COLLECTION)
+            .where({ notebookId, userId })
+            .skip(skip)
+            .limit(BATCH_SIZE)
+            .get();
+        } catch (skipError) {
+          console.warn(`[getPagesByNotebook] 第 ${batch + 1} 批 skip 查询也失败，尝试全量查询后客户端分页`);
+          
+          // 最后的回退方案：全量查询，然后在客户端进行分页
+          result = await db
+            .collection(PAGES_COLLECTION)
+            .where({ notebookId, userId })
+            .get();
+          
+          if (Array.isArray(result?.data)) {
+            result.data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+            console.log(`[getPagesByNotebook] 使用全量查询方案，返回 ${result.data.length} 个页面`);
+            return result.data;
+          }
+        }
+      }
+
+      if (!isSuccess(result)) {
+        throw new Error(`获取第 ${batch + 1} 批页面失败: ${(result as any)?.message || JSON.stringify(result)}`);
+      }
+
+      const batchPages = Array.isArray(result.data) ? result.data : [];
+      console.log(`[getPagesByNotebook] 第 ${batch + 1} 批获取了 ${batchPages.length} 个页面`);
+      return batchPages;
+    })();
+
+    batchQueries.push(batchQuery);
+  }
+
+  // 并行执行所有批次的查询，然后组装结果
+  const allBatches = await Promise.all(batchQueries);
+  const allPages: StoredJournalPageEntry[] = [];
+  
+  for (const batch of allBatches) {
+    allPages.push(...batch);
+  }
+
+  // 确保最终结果按 order 排序
+  return sortPagesByOrder(allPages);
 }
 
 /**
- * 删除指定页面
+ * 删除指定页面（分批查询以避免返回体过大）
  */
 export async function deletePage(pageId: string, notebookId: string): Promise<void> {
   await ensureAnonymousLogin();
@@ -485,13 +571,9 @@ export async function deletePage(pageId: string, notebookId: string): Promise<vo
 
   const db = getDb();
   const pagesCollection = db.collection(PAGES_COLLECTION) as PageCollection;
-  const pagesResult = await pagesCollection.where({ notebookId, userId }).get();
-
-  if (!isSuccess(pagesResult)) {
-    throw new Error(`获取当前页面顺序失败: ${getResultMessage(pagesResult)}`);
-  }
-
-  const existingPages = toPages(pagesResult);
+  
+  // 使用分批查询获取所有页面
+  const existingPages = await getPagesByNotebook(notebookId);
   const pageToDelete = existingPages.find((page) => page.id === pageId);
 
   if (!pageToDelete) {
@@ -524,7 +606,7 @@ export async function deletePage(pageId: string, notebookId: string): Promise<vo
 }
 
 /**
- * 调整页面顺序
+ * 调整页面顺序（分批查询以避免返回体过大）
  * @param pageIds 按新顺序排列的页面 ID 数组
  */
 export async function reorderPages(notebookId: string, pageIds: string[]): Promise<void> {
@@ -537,13 +619,8 @@ export async function reorderPages(notebookId: string, pageIds: string[]): Promi
   const maxAttempts = 3;
 
   const getCurrentPages = async () => {
-    const pagesResult = await pagesCollection.where({ notebookId, userId }).get();
-
-    if (!isSuccess(pagesResult)) {
-      throw new Error(`获取当前页面顺序失败: ${getResultMessage(pagesResult)}`);
-    }
-
-    return toPages(pagesResult);
+    // 使用分批查询获取所有页面
+    return await getPagesByNotebook(notebookId);
   };
 
   const getPagesToUpdate = (currentPages: (JournalPageEntry & { _id?: string })[]) => {

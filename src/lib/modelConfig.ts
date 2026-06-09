@@ -72,9 +72,9 @@ export const MODEL_CONFIGS: Record<ModelType, ModelConfig> = {
   "qs-gpt-image-2": {
     id: "qs-gpt-image-2",
     name: "QS GPT Image 2",
-    description: "小红书 QS 平台的 GPT Image 2 模型，效果超好，强烈推荐！一张多图成本约1块钱",
+    description: "小红书 QS 平台的 GPT Image 2 模型，支持图片编辑，效果超好，强烈推荐！",
     provider: "other",
-    endpoint: "/maas/openai/openai/images/generations?api-version=2025-04-01-preview",
+    endpoint: "https://maas.devops.rednote.life/openai/openai/images/edits?api-version=2025-04-01-preview",
     apiTokenEnvVar: "VITE_QS_GPT_IMAGE_2_API_KEY",
     maxReferenceImages: 1,
     supportedAspectRatios: ["1:1", "16:9", "9:16"],

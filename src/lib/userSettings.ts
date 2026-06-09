@@ -236,7 +236,7 @@ export function saveSoundEnabled(enabled: boolean): void {
   void cloudSaveSettings({ soundEnabled: enabled, updatedAt: Date.now() });
 }
 
-// ── 初始化 ────────────────────────────────────────────────────────────────────
+// ── 初始化和清理 ──────────────────────────────────────────────────────────────
 
 /**
  * 应用启动时调用：完整初始化所有用户设置
@@ -245,4 +245,19 @@ export function saveSoundEnabled(enabled: boolean): void {
 export async function initializeUserSettings(): Promise<UserSettingsData> {
   await ensureAnonymousLogin();
   return cloudFetchSettings();
+}
+
+/**
+ * 登出时调用：清理本地缓存中的所有用户设置
+ * 防止其他用户看到前一个用户的数据
+ */
+export function clearAllLocalSettings(): void {
+  try {
+    localSaveField(CUSTOM_TAGS_KEY, null);
+    localSaveField(API_CONFIG_KEY, null);
+    localSaveField(SOUND_ENABLED_KEY, null);
+    console.log('[UserSettings] Cleared all local settings');
+  } catch (err) {
+    console.error('[UserSettings] Failed to clear local settings:', err);
+  }
 }

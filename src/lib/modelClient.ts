@@ -1,4 +1,4 @@
-import { edgeStyleOptions, sceneOptions, stylePresets, templatePresets, moodOptions, narratorOptions, paletteOptions, vibeOptions, layoutShapeOptions, decorationOptions, paperOptions } from "../data/presets";
+import { edgeStyleOptions, sceneOptions, stylePresets, templatePresets, moodOptions, narratorOptions, paletteOptions, vibeOptions, layoutShapeOptions, decorationOptions, paperOptions, mainColorOptions } from "../data/presets";
 import type { JournalDraft, JournalPage, PhotoAsset, StyleId, TemplateId, UserAnswers } from "../types";
 import { formatDate } from "./format";
 import { callModelAPI } from "./modelRouter";
@@ -8,6 +8,14 @@ import { getVApiKeyFromCloudFunction } from "./cloudbase";
 
 /** 从数组中随机选择一个元素 */
 const randomPick = <T,>(items: T[]): T => items[Math.floor(Math.random() * items.length)];
+
+/**
+ * 从数组中随机选择 N 个不重复的元素
+ */
+const randomPickMultiple = <T,>(items: T[], count: number): T[] => {
+  const shuffled = [...items].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, Math.min(count, items.length));
+};
 
 /** 控制 console 调试日志开关：开发模式默认开。 */
 const DEBUG_ENABLED = import.meta.env.DEV;
@@ -75,6 +83,8 @@ type KratosPic2PicParams = {
   retryDelayMs?: number;
   /** 每次尝试前回调。 */
   onAttempt?: (info: KratosAttemptInfo) => void;
+  /** 外部直接传入的 API Key，优先级最高（用于生产环境从云函数取 key 后直调）。 */
+  apiKeyOverride?: string;
 };
 
 type Flux2ProPic2PicParams = {
@@ -89,6 +99,8 @@ type Flux2ProPic2PicParams = {
   retryDelayMs?: number;
   /** 每次尝试前回调。 */
   onAttempt?: (info: KratosAttemptInfo) => void;
+  /** 外部直接传入的 API Key，优先级最高（用于生产环境从云函数取 key 后直调）。 */
+  apiKeyOverride?: string;
 };
 
 const fetchWithTimeout = async (label: string, input: RequestInfo | URL, init: RequestInit, timeoutMs: number) => {
@@ -375,42 +387,60 @@ const buildVisionFactsPhrase = (answers: UserAnswers, photoOrder: string[]): str
  * 用户没勾选时返回空数组。
  */
 const splitEdgeStyles = (answers: UserAnswers): { fixed: string[]; decorative: string[] } => {
-  const picked = new Set(answers.edgeStyles ?? []);
-  
-  // 添加自定义标签中的边缘风格
-  const customEdgeStyles = answers.customTags?.["edgeStyles"] ?? [];
-  customEdgeStyles.forEach(tag => picked.add(tag));
-  
-  const fixed: string[] = [];
-  const decorative: string[] = [];
-  for (const opt of edgeStyleOptions) {
-    if (!picked.has(opt.label)) continue;
-    if (opt.isFixedShape) fixed.push(opt.label);
-    else decorative.push(opt.label);
-  }
-  
-  // 处理自定义标签（不在 edgeStyleOptions 中的）
-  // 自定义标签默认作为装饰性边缘处理
-  for (const customTag of customEdgeStyles) {
-    const isInOptions = edgeStyleOptions.some(opt => opt.label === customTag);
-    if (!isInOptions) {
-      decorative.push(customTag);
-    }
-  }
-  
-  return { fixed, decorative };
+   const picked = new Set(answers.edgeStyles ?? []);
+   
+   // 添加自定义标签中的边缘风格
+   const customEdgeStyles = answers.customTags?.["edgeStyles"] ?? [];
+   customEdgeStyles.forEach(tag => picked.add(tag));
+   
+   const fixed: string[] = [];
+   const decorative: string[] = [];
+   for (const opt of edgeStyleOptions) {
+     if (!picked.has(opt.label)) continue;
+     if (opt.isFixedShape) fixed.push(opt.label);
+     else decorative.push(opt.label);
+   }
+   
+   // 处理自定义标签（不在 edgeStyleOptions 中的）
+   // 自定义标签默认作为装饰性边缘处理
+   for (const customTag of customEdgeStyles) {
+     const isInOptions = edgeStyleOptions.some(opt => opt.label === customTag);
+     if (!isInOptions) {
+       decorative.push(customTag);
+     }
+   }
+   
+   return { fixed, decorative };
+};
+
+/**
+ * 生成随机的视觉风味偏好
+ * 随机选择：色调、氛围标签、排版形状、边缘风格、装饰元素、纸张底色、主色调
+ * 保持不变：文字部分（标题、场景、情绪、叙述者等）
+ */
+export const generateRandomVisualFlavor = (currentAnswers: UserAnswers): Partial<UserAnswers> => {
+  return {
+    palette: randomPick(paletteOptions).label,
+    vibes: randomPickMultiple(vibeOptions, Math.floor(Math.random() * 3) + 1), // 随机选 1-3 个（vibeOptions 是字符串数组）
+    layoutShapes: randomPickMultiple(layoutShapeOptions, Math.floor(Math.random() * 2) + 1).map(opt => opt.label), // 随机选 1-2 个
+    edgeStyles: randomPickMultiple(edgeStyleOptions, Math.floor(Math.random() * 2) + 1).map(opt => opt.label), // 随机选 1-2 个
+    decorations: randomPickMultiple(decorationOptions, Math.floor(Math.random() * 3) + 1).map(opt => opt.label), // 随机选 1-3 个
+    paperTexture: randomPick(paperOptions).label,
+    mainColor: Math.random() > 0.5 ? randomPick(mainColorOptions).label : undefined, // 50% 概率选择主色调
+  };
 };
 
 /** 收集所有视觉风味选项（palette/vibes/layoutShapes/edgeStyles/decorations/paperTexture），缺省项随机选择。 */
 const buildVisualFlavorPhrase = (answers: UserAnswers): string => {
   const parts: string[] = [];
   
-  // 色调：如果用户没选，随机选一个
-  const selectedPalette = answers.palette || randomPick(paletteOptions).label;
-  parts.push(`整体色调倾向于「${selectedPalette}」的视觉氛围`);
+  // 色调：只在用户选中时加入 prompt
+  if (answers.palette) {
+    parts.push(`整体色调倾向于「${answers.palette}」的视觉氛围`);
+  }
   
-  // 氛围标签：如果用户没选，随机选 1-2 个
-  const selectedVibes = answers.vibes?.length ? answers.vibes : [randomPick(vibeOptions), randomPick(vibeOptions)];
+  // 氛围标签：只使用用户选中的标签，不随机生成
+  const selectedVibes = answers.vibes ?? [];
   // 添加自定义的 vibes 标签
   const customVibes = answers.customTags?.["vibes"] ?? [];
   const allVibes = [...new Set([...selectedVibes, ...customVibes])];
@@ -445,8 +475,8 @@ const buildVisualFlavorPhrase = (answers: UserAnswers): string => {
     parts.push(`画面应该传达${descriptions.join("、")}的整体感受`);
   }
   
-  // 排版形状：如果用户没选，随机选 1-2 个
-  const selectedShapes = answers.layoutShapes?.length ? answers.layoutShapes : [randomPick(layoutShapeOptions).label, randomPick(layoutShapeOptions).label];
+  // 排版形状：只使用用户选中的形状，不随机生成
+  const selectedShapes = answers.layoutShapes ?? [];
   // 添加自定义的 layoutShapes 标签
   const customShapes = answers.customTags?.["layoutShapes"] ?? [];
   const allShapes = [...new Set([...selectedShapes, ...customShapes])];
@@ -477,8 +507,8 @@ const buildVisualFlavorPhrase = (answers: UserAnswers): string => {
     parts.push(`在照片轮廓外侧叠加「${decoEdges.join("、")}」的装饰性边缘效果`);
   }
   
-  // 装饰元素：如果用户没选，随机选 1-2 个
-  const selectedDecorations = answers.decorations?.length ? answers.decorations : [randomPick(decorationOptions).label, randomPick(decorationOptions).label];
+  // 装饰元素：只使用用户选中的装饰元素，不随机生成
+  const selectedDecorations = answers.decorations ?? [];
   // 添加自定义的 decorations 标签
   const customDecorations = answers.customTags?.["decorations"] ?? [];
   const allDecorations = [...new Set([...selectedDecorations, ...customDecorations])];
@@ -487,9 +517,10 @@ const buildVisualFlavorPhrase = (answers: UserAnswers): string => {
     parts.push(`用「${allDecorations.join("、")}」等元素作为版面点缀，围绕主体但不遮挡内容`);
   }
   
-  // 纸张底色：如果用户没选，随机选一个
-  const selectedPaper = answers.paperTexture || randomPick(paperOptions).label;
-  parts.push(`整张拼贴的底层纸感采用「${selectedPaper}」的质地与色调`);
+  // 纸张底色：只在用户选中时加入 prompt
+  if (answers.paperTexture) {
+    parts.push(`整张拼贴的底层纸感采用「${answers.paperTexture}」的质地与色调`);
+  }
   
   // 底图颜色：如果用户选了，加入到 prompt
   if (answers.mainColor) {
@@ -741,8 +772,9 @@ const callKratosUnifiedPic2PicOnce = async ({
    targetHeight = DEFAULT_GEN_HEIGHT,
    modelType = "gpt2",
    timeoutMs = 300_000,
- }: Omit<KratosPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
-   // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件；本地开发默认走 /kratos 代理（vite 已配置）。
+   apiKeyOverride,
+ }: Omit<KratosPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt"> & { apiKeyOverride?: string }) => {
+   // 优先级：外部传入 > 用户面板配置 > 环境变量 > 本地配置文件
     const userConfigs = loadUserApiConfig();
     const userGpt2Config = userConfigs?.["gpt-2"];
     const endpoint = userGpt2Config?.customEndpoint
@@ -750,33 +782,33 @@ const callKratosUnifiedPic2PicOnce = async ({
       : ((import.meta.env.VITE_KRATOS_ACTION_URL as string | undefined) ?? getApiKey("VITE_KRATOS_ACTION_URL") ?? "/kratos/ads/materialcenter/doaction");
 
    const body = {
-     tabName: "material_analysis_tab",
-     actionCode: "UnifiedPic2PicAction",
-     paramsMap: {
-       prompt,
-       modelType,
-       imageUrls,
-       targetWidth: String(targetWidth),
-       targetHeight: String(targetHeight),
-     },
-   };
+      tabName: "material_analysis_tab",
+      actionCode: "UnifiedPic2PicAction",
+      paramsMap: {
+        prompt,
+        modelType,
+        imageUrls,
+        targetWidth: String(targetWidth),
+        targetHeight: String(targetHeight),
+      },
+    };
 
-   const glog = createModelLogger("GPT-2");
-   glog("request →", endpoint);
-   glog("  modelType:", modelType);
-   glog("  prompt:", prompt.slice(0, 100) + "...");
-   glog("  imageUrls:", imageUrls.length, "张图片");
-   glog("  targetWidth:", targetWidth);
-   glog("  targetHeight:", targetHeight);
-   glog("=== 完整请求体 ===");
-   glog(JSON.stringify(body, null, 2));
+    const glog = createModelLogger("GPT-2");
+    glog("request →", endpoint);
+    glog("  modelType:", modelType);
+    glog("  prompt:", prompt.slice(0, 100) + "...");
+    glog("  imageUrls:", imageUrls.length, "张图片");
+    glog("  targetWidth:", targetWidth);
+    glog("  targetHeight:", targetHeight);
+    glog("=== 完整请求体 ===");
+    glog(JSON.stringify(body, null, 2));
 
-   // 构建请求头，如果用户提供了 API Key 或本地配置了 API Key 则添加到请求头中
-   const headers: Record<string, string> = { "Content-Type": "application/json" };
-   const kratosApiKey = userGpt2Config?.apiKey || getApiKey("VITE_KRATOS_API_TOKEN");
-   if (kratosApiKey) {
-     headers["Authorization"] = `Bearer ${kratosApiKey}`;
-   }
+    // 构建请求头，如果用户提供了 API Key 或本地配置了 API Key 则添加到请求头中
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const kratosApiKey = apiKeyOverride || userGpt2Config?.apiKey || getApiKey("VITE_KRATOS_API_TOKEN");
+    if (kratosApiKey) {
+      headers["Authorization"] = `Bearer ${kratosApiKey}`;
+    }
 
   const response = await fetchWithTimeout(
     "GPT-2 接口",
@@ -888,11 +920,12 @@ const callFlux2ProPic2PicOnce = async ({
    targetWidth = DEFAULT_GEN_WIDTH,
    targetHeight = DEFAULT_GEN_HEIGHT,
    timeoutMs = 300_000,
- }: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
-   // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件
-   const userConfigs = loadUserApiConfig();
-   const userFlux2Config = userConfigs?.["flux-2-pro"];
-   const apiToken = userFlux2Config?.apiKey || getApiKey("VITE_REPLICATE_API_TOKEN");
+   apiKeyOverride,
+ }: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt"> & { apiKeyOverride?: string }) => {
+   // 优先级：外部传入 > 用户面板配置 > 环境变量 > 本地配置文件
+    const userConfigs = loadUserApiConfig();
+    const userFlux2Config = userConfigs?.["flux-2-pro"];
+    const apiToken = apiKeyOverride || userFlux2Config?.apiKey || getApiKey("VITE_REPLICATE_API_TOKEN");
    
    if (!apiToken) {
      throw new Error(
@@ -1115,11 +1148,12 @@ const callQsGptImage2Once = async ({
   targetWidth = DEFAULT_GEN_WIDTH,
   targetHeight = DEFAULT_GEN_HEIGHT,
   timeoutMs = 300_000,
-}: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
-  // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件
+  apiKeyOverride,
+}: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt"> & { apiKeyOverride?: string }) => {
+  // 优先级：外部传入 > 用户面板配置 > 环境变量 > 本地配置文件
   const userConfigs = loadUserApiConfig();
   const userQsConfig = userConfigs?.["qs-gpt-image-2"];
-  const apiKey = userQsConfig?.apiKey || getApiKey("VITE_QS_GPT_IMAGE_2_API_KEY");
+  const apiKey = apiKeyOverride || userQsConfig?.apiKey || getApiKey("VITE_QS_GPT_IMAGE_2_API_KEY");
 
   if (!apiKey) {
     throw new Error(
@@ -1129,8 +1163,8 @@ const callQsGptImage2Once = async ({
     );
   }
 
-  // 使用用户自定义端点或默认端点
-  const endpoint = userQsConfig?.customEndpoint || "/maas/openai/openai/images/generations?api-version=2025-04-01-preview";
+  // 使用用户自定义端点或默认端点（改为 /images/edits）
+  const endpoint = userQsConfig?.customEndpoint || "https://maas.devops.rednote.life/openai/openai/images/edits?api-version=2025-04-01-preview";
 
   const qlog = createModelLogger("QS GPT Image 2");
 
@@ -1147,58 +1181,62 @@ const callQsGptImage2Once = async ({
   qlog("  model: gpt-image-2");
   qlog("  prompt:", prompt.slice(0, 100) + "...");
   qlog("  size:", `${targetWidth}x${targetHeight}`);
-  qlog("  response_format: b64_json");
+  qlog("  quality: low");
+  qlog("  n: 1");
   qlog(`  images: ${imageUrlList.length} 张`);
 
   // 使用 FormData API 构建 multipart/form-data 请求体
   const formData = new FormData();
 
-  // 添加多个 image 字段（支持多张图片）- 作为字符串 URL
+  // 添加图片字段 - 直接传递 URL（QS API 支持 image_url 参数）
   for (let i = 0; i < imageUrlList.length; i++) {
-    formData.append("image", imageUrlList[i]);
+    const imageUrl = imageUrlList[i];
+    qlog(`✓ 图片 ${i + 1} URL: ${imageUrl.slice(0, 80)}...`);
+    // 直接添加 URL，不需要转换为 Blob
+    formData.append("image_url", imageUrl);
   }
 
   // 添加其他字段
   formData.append("prompt", prompt);
-  formData.append("model", "gpt-image-2");
   formData.append("size", `${targetWidth}x${targetHeight}`);
-  formData.append("response_format", "b64_json");
+  formData.append("quality", "low");
+  formData.append("n", "1");
 
   // 打印完整的请求体信息
   qlog("=== 完整请求体 (multipart/form-data) ===");
   qlog(`  images: ${imageUrlList.length} 张`);
   qlog(`  prompt 长度: ${prompt.length} 字符`);
-  qlog(`  model: gpt-image-2`);
   qlog(`  size: ${targetWidth}x${targetHeight}`);
-  qlog(`  response_format: b64_json`);
+  qlog(`  quality: low`);
+  qlog(`  n: 1`);
 
   // 打印实际发送的请求信息（用于调试）
   qlog("=== 实际发送的请求信息 ===");
   qlog(`  URL: ${endpoint}`);
   qlog(`  Method: POST`);
   qlog(`  Headers:`);
-  qlog(`    Authorization: Bearer ${apiKey.slice(0, 10)}...${apiKey.slice(-10)}`);
+  qlog(`    api-key: ${apiKey.slice(0, 10)}...${apiKey.slice(-10)}`);
   qlog(`    Content-Type: multipart/form-data (自动设置)`);
   qlog(`  Body 字段:`);
   for (let i = 0; i < imageUrlList.length; i++) {
-    qlog(`    - image[${i + 1}]: ${imageUrlList[i].slice(0, 80)}...`);
+    qlog(`    - image_url[${i + 1}]: ${imageUrlList[i].slice(0, 80)}...`);
   }
   qlog(`    - prompt: ${prompt.length} 字符`);
-  qlog(`    - model: gpt-image-2`);
   qlog(`    - size: ${targetWidth}x${targetHeight}`);
-  qlog(`    - response_format: b64_json`);
+  qlog(`    - quality: low`);
+  qlog(`    - n: 1`);
 
   // 生成完整的 curl 命令用于调试
   qlog("=== 完整 curl 命令 ===");
-  let curlCmd = `curl --location '${endpoint}' \\
-  --header 'Authorization: Bearer ${apiKey}' \\`;
+  let curlCmd = `curl -sS -X POST "${endpoint}" \\
+  -H "api-key: ${apiKey}" \\`;
   for (let i = 0; i < imageUrlList.length; i++) {
-    curlCmd += `\n  --form 'image="${imageUrlList[i]}"' \\`;
+    curlCmd += `\n  -F "image_url=${imageUrlList[i]}" \\`;
   }
-  curlCmd += `\n  --form 'prompt="${prompt.replace(/"/g, '\\"')}"' \\
-  --form 'model="gpt-image-2"' \\
-  --form 'size="${targetWidth}x${targetHeight}"' \\
-  --form 'response_format="b64_json"'`;
+  curlCmd += `\n  -F "prompt=${prompt.replace(/"/g, '\\"')}" \\
+  -F "quality=low" \\
+  -F "n=1" \\
+  -F "size=${targetWidth}x${targetHeight}"`;
   qlog(curlCmd);
 
   const response = await fetchWithTimeout(
@@ -1207,7 +1245,7 @@ const callQsGptImage2Once = async ({
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
+        "api-key": apiKey,
         // 不设置 Content-Type，让浏览器自动处理 FormData
       },
       body: formData,
@@ -1363,13 +1401,14 @@ const callVApiGptImage2Once = async ({
   targetWidth = DEFAULT_GEN_WIDTH,
   targetHeight = DEFAULT_GEN_HEIGHT,
   timeoutMs = 300_000,
+  apiKeyOverride,
 }: Omit<Flux2ProPic2PicParams, "maxAttempts" | "retryDelayMs" | "onAttempt">) => {
   const vlog = createModelLogger("V-API GPT Image 2");
   
-  // 优先使用用户提供的 API Key，其次使用环境变量，再次使用本地配置文件，最后从 CloudBase 获取
+  // 优先级：外部传入 > 用户面板配置 > 环境变量 > 本地配置文件 > CloudBase 云函数
   const userConfigs = loadUserApiConfig();
   const userVApiConfig = userConfigs?.["v-api-gpt-image-2"];
-  let apiKey = userVApiConfig?.apiKey || getApiKey("VITE_V_API_GPT_IMAGE_2_API_KEY");
+  let apiKey = apiKeyOverride || userVApiConfig?.apiKey || getApiKey("VITE_V_API_GPT_IMAGE_2_API_KEY");
 
   // 如果没有配置的 API Key，从 CloudBase 云函数获取
   if (!apiKey) {

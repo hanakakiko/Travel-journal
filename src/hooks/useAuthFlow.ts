@@ -93,11 +93,11 @@ export function useAuthFlow(options?: UseAuthFlowOptions) {
 
   // ===== 用户名密码注册 =====
   const signUpWithUsername = useCallback(
-    async (username: string, password: string, nickname?: string) => {
+    async (username: string, password: string, email?: string, nickname?: string) => {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await auth.signUpWithUsername(username, password, nickname);
+        const result = await auth.signUpWithUsername(username, password, email, nickname);
         if (result.error) {
           const errorMsg = result.error.message || '注册失败';
           setError(errorMsg);

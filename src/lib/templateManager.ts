@@ -2,10 +2,12 @@
  * 模板管理工具
  * 负责保存、加载、删除用户的配置模板。
  *
- * 存储策略（双写）：
- *  1. 优先使用腾讯云 CloudBase 数据库（集合名：journal_templates）
- *  2. 同时在 localStorage 做本地缓存，断网时也能正常使用
- *  3. 所有云端操作失败时静默降级为仅本地操作，不阻断 UI 流程
+ * 存储策略（云端为主 + 本地缓存）：
+ *  1. 所有模板数据存储在 CloudBase 数据库（集合名：journal_templates）
+ *  2. 本地 localStorage 作为缓存层，用于离线支持和快速读取
+ *  3. 每次登录后从云端拉取最新数据，覆盖本地缓存
+ *  4. 登出时清理本地缓存，防止数据泄露
+ *  5. 网络失败时自动降级为本地缓存，静默处理
  */
 
 import type { SavedTemplate, UserAnswers, StyleId, TemplateId } from "../types";
@@ -14,7 +16,7 @@ import { ensureAnonymousLogin, getCurrentUserId, getDb } from "./cloudbase";
 const STORAGE_KEY = "journal-templates";
 const COLLECTION = "journal_templates";
 
-// ── 本地 localStorage 操作（离线缓存层）────────────────────────────────────────
+// ── 本地 localStorage 操作（缓存层）────────────────────────────────────────
 
 function localGetAll(): SavedTemplate[] {
   try {
@@ -30,6 +32,14 @@ function localSave(templates: SavedTemplate[]): void {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
   } catch {
     // localStorage 不可用时静默失败
+  }
+}
+
+function localClear(): void {
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // 静默失败
   }
 }
 
@@ -64,7 +74,7 @@ async function cloudFetchAll(): Promise<SavedTemplate[]> {
 }
 
 /**
- * 向云端写入一条新模板文档，失败时静默。
+ * 向云端写入一条新模板文档。
  * 文档 ID 使用模板自己的 id 字段，方便后续精准删除。
  */
 async function cloudAdd(template: SavedTemplate): Promise<void> {
@@ -82,7 +92,7 @@ async function cloudAdd(template: SavedTemplate): Promise<void> {
 }
 
 /**
- * 从云端删除指定模板文档，失败时静默。
+ * 从云端删除指定模板文档。
  */
 async function cloudDelete(templateId: string): Promise<void> {
   try {
@@ -94,7 +104,20 @@ async function cloudDelete(templateId: string): Promise<void> {
   }
 }
 
-// ── 公开 API（同步版，兼容现有调用方）────────────────────────────────────────
+/**
+ * 更新云端模板的名称。
+ */
+async function cloudRename(templateId: string, newName: string): Promise<void> {
+  try {
+    await ensureAnonymousLogin();
+    const db = getDb();
+    await db.collection(COLLECTION).doc(templateId).update({ name: newName });
+  } catch {
+    // 静默失败
+  }
+}
+
+// ── 公开 API ────────────────────────────────────────────────────────────────
 
 /**
  * 获取所有已保存的模板（同步，读本地缓存）。
@@ -103,7 +126,8 @@ async function cloudDelete(templateId: string): Promise<void> {
 export const getAllTemplates = (): SavedTemplate[] => localGetAll();
 
 /**
- * 获取所有已保存的模板（异步，优先从云端拉取）。
+ * 获取所有已保存的模板（异步，从云端拉取）。
+ * 登录后应该调用此方法来同步最新的云端数据。
  */
 export const getAllTemplatesAsync = (): Promise<SavedTemplate[]> => cloudFetchAll();
 
@@ -151,7 +175,7 @@ export const deleteTemplate = (templateId: string): void => {
 };
 
 /**
- * 更新模板名称（仅本地，轻量操作）。
+ * 更新模板名称（本地立即生效，云端异步同步）。
  */
 export const renameTemplate = (templateId: string, newName: string): void => {
   const templates = localGetAll();
@@ -160,6 +184,8 @@ export const renameTemplate = (templateId: string, newName: string): void => {
   if (template) {
     template.name = newName;
     localSave(templates);
+    // 异步同步到云端
+    void cloudRename(templateId, newName);
   }
 };
 
@@ -169,4 +195,11 @@ export const renameTemplate = (templateId: string, newName: string): void => {
 export const getTemplate = (templateId: string): SavedTemplate | null => {
   const templates = localGetAll();
   return templates.find((t) => t.id === templateId) ?? null;
+};
+
+/**
+ * 清理本地缓存（登出时调用）。
+ */
+export const clearLocalCache = (): void => {
+  localClear();
 };

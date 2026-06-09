@@ -8,12 +8,13 @@ interface EditableTagGroupProps {
   defaultTags: string[];
   customTags?: string[];
   selectedTags?: string[];
-  onAddTag: (newTag: string) => void;
-  onRemoveTag: (tag: string) => void;
+  onAddTag?: (newTag: string) => void;
+  onRemoveTag?: (tag: string) => void;
   onToggleTag: (tag: string) => void;
   onSound: (effect: SoundEffect) => void;
   hint?: string;
   isMultiple?: boolean;
+  readOnly?: boolean;
 }
 
 export function EditableTagGroup({
@@ -27,6 +28,7 @@ export function EditableTagGroup({
   onSound,
   hint,
   isMultiple = true,
+  readOnly = false,
 }: EditableTagGroupProps) {
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [newTagInput, setNewTagInput] = useState("");
@@ -36,7 +38,7 @@ export function EditableTagGroup({
   
   const handleAddTag = () => {
     const trimmed = newTagInput.trim();
-    if (!trimmed) return;
+    if (!trimmed || !onAddTag) return;
     
     onSound("tap");
     onAddTag(trimmed);
@@ -45,7 +47,7 @@ export function EditableTagGroup({
   };
   
   const handleRemoveTag = (tag: string) => {
-    if (!canRemoveTag(tag, defaultTags, customTags)) {
+    if (!onRemoveTag || !canRemoveTag(tag, defaultTags, customTags)) {
       // 无法删除时不播放声音，只是不执行删除操作
       return;
     }
@@ -84,7 +86,7 @@ export function EditableTagGroup({
               >
                 {tag}
               </button>
-              {isCustom && (
+              {isCustom && !readOnly && (
                 <button
                   type="button"
                   className="tag-chip-delete"
@@ -95,7 +97,7 @@ export function EditableTagGroup({
                   <X size={14} />
                 </button>
               )}
-              {!isCustom && !canRemove && (
+              {!isCustom && !canRemove && !readOnly && (
                 <span className="tag-chip-lock" title="至少需要保留两个默认标签">
                   🔒
                 </span>
@@ -104,57 +106,61 @@ export function EditableTagGroup({
           );
         })}
         
-        {isAddingTag ? (
-          <div className="tag-input-wrapper">
-            <input
-              type="text"
-              className="tag-input"
-              placeholder="输入新标签"
-              value={newTagInput}
-              onChange={(e) => setNewTagInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleAddTag();
-                } else if (e.key === "Escape") {
-                  setIsAddingTag(false);
-                  setNewTagInput("");
-                }
-              }}
-              autoFocus
-            />
-            <button
-              type="button"
-              className="tag-input-confirm"
-              onClick={handleAddTag}
-              title="确认添加"
-            >
-              <Plus size={14} />
-            </button>
-            <button
-              type="button"
-              className="tag-input-cancel"
-              onClick={() => {
-                setIsAddingTag(false);
-                setNewTagInput("");
-              }}
-              title="取消"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="tag-add-button"
-            onClick={() => {
-              onSound("tap");
-              setIsAddingTag(true);
-            }}
-            title="添加新标签"
-          >
-            <Plus size={16} />
-            <span>添加</span>
-          </button>
+        {!readOnly && (
+          <>
+            {isAddingTag ? (
+              <div className="tag-input-wrapper">
+                <input
+                  type="text"
+                  className="tag-input"
+                  placeholder="输入新标签"
+                  value={newTagInput}
+                  onChange={(e) => setNewTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleAddTag();
+                    } else if (e.key === "Escape") {
+                      setIsAddingTag(false);
+                      setNewTagInput("");
+                    }
+                  }}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="tag-input-confirm"
+                  onClick={handleAddTag}
+                  title="确认添加"
+                >
+                  <Plus size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="tag-input-cancel"
+                  onClick={() => {
+                    setIsAddingTag(false);
+                    setNewTagInput("");
+                  }}
+                  title="取消"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="tag-add-button"
+                onClick={() => {
+                  onSound("tap");
+                  setIsAddingTag(true);
+                }}
+                title="添加新标签"
+              >
+                <Plus size={16} />
+                <span>添加</span>
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

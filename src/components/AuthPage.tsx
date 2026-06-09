@@ -16,6 +16,9 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
    const [mode, setMode] = useState<AuthMode>(initialMode);
    const [signUpMethod, setSignUpMethod] = useState<SignUpMethod>('email');
 
+   // 调试日志
+   console.log('[AuthPage] mode:', mode, 'signUpMethod:', signUpMethod);
+
    return (
      <div style={{
        minHeight: '100vh',
@@ -55,81 +58,81 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
            </h1>
          </div>
 
-           {/* 标签切换 - 使用全局 segmented 风格 */}
-           <div className="segmented" style={{
-             display: 'grid',
-             gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-             gap: '10px',
-             marginBottom: '24px',
-             marginLeft: '0',
-             marginRight: '0',
+           {/* 主标签页切换 - 登录 / 注册 */}
+           <div style={{
+             display: 'flex',
+             borderBottom: '2px solid rgba(23, 18, 15, 0.12)',
+             marginBottom: '28px',
+             gap: '0',
            }}>
              <button
                onClick={() => setMode('login')}
-               className={mode === 'login' ? 'is-active' : ''}
                style={{
-                 minHeight: '44px',
-                 padding: '8px 12px',
-                 border: mode === 'login' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
-                 borderRadius: '14px',
-                 background: mode === 'login' ? 'var(--ink)' : '#fffaf0',
-                 color: mode === 'login' ? '#fff7eb' : 'var(--ink)',
-                 fontWeight: 900,
-                 fontSize: '14px',
+                 flex: 1,
+                 minHeight: '48px',
+                 padding: '10px 16px',
+                 border: 'none',
+                 borderBottom: mode === 'login' ? '3px solid var(--ink)' : '3px solid transparent',
+                 borderRadius: '0',
+                 background: 'transparent',
+                 color: mode === 'login' ? 'var(--ink)' : 'rgba(23, 18, 15, 0.4)',
+                 fontWeight: mode === 'login' ? 900 : 600,
+                 fontSize: '16px',
                  cursor: 'pointer',
                  display: 'flex',
                  alignItems: 'center',
                  justifyContent: 'center',
-                 gap: '6px',
+                 gap: '7px',
                  transition: 'all 0.2s ease',
-                 boxShadow: mode === 'login' ? '3px 4px 0 rgba(38, 29, 26, 0.15)' : 'none',
+                 marginBottom: '-2px',
                }}
                onMouseEnter={(e) => {
                  if (mode !== 'login') {
-                   e.currentTarget.style.background = '#fff0e0';
+                   e.currentTarget.style.color = 'rgba(23, 18, 15, 0.7)';
                  }
                }}
                onMouseLeave={(e) => {
                  if (mode !== 'login') {
-                   e.currentTarget.style.background = '#fffaf0';
+                   e.currentTarget.style.color = 'rgba(23, 18, 15, 0.4)';
                  }
                }}
              >
-               <LogIn size={16} />
+               <LogIn size={17} />
                <span>登录</span>
              </button>
              <button
                onClick={() => setMode('signup')}
-               className={mode === 'signup' ? 'is-active' : ''}
                style={{
-                 minHeight: '44px',
-                 padding: '8px 12px',
-                 border: mode === 'signup' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
-                 borderRadius: '14px',
-                 background: mode === 'signup' ? 'var(--ink)' : '#fffaf0',
-                 color: mode === 'signup' ? '#fff7eb' : 'var(--ink)',
-                 fontWeight: 900,
-                 fontSize: '14px',
+                 flex: 1,
+                 minHeight: '48px',
+                 padding: '10px 16px',
+                 border: 'none',
+                 borderBottom: mode === 'signup' ? '3px solid var(--ink)' : '3px solid transparent',
+                 borderRadius: '0',
+                 background: 'transparent',
+                 color: mode === 'signup' ? 'var(--ink)' : 'rgba(23, 18, 15, 0.4)',
+                 fontWeight: mode === 'signup' ? 900 : 600,
+                 fontSize: '16px',
                  cursor: 'pointer',
                  display: 'flex',
                  alignItems: 'center',
                  justifyContent: 'center',
-                 gap: '6px',
+                 gap: '7px',
                  transition: 'all 0.2s ease',
-                 boxShadow: mode === 'signup' ? '3px 4px 0 rgba(38, 29, 26, 0.15)' : 'none',
+                 marginBottom: '-2px',
                }}
                onMouseEnter={(e) => {
                  if (mode !== 'signup') {
-                   e.currentTarget.style.background = '#fff0e0';
+                   e.currentTarget.style.color = 'rgba(23, 18, 15, 0.7)';
                  }
                }}
                onMouseLeave={(e) => {
                  if (mode !== 'signup') {
-                   e.currentTarget.style.background = '#fffaf0';
+                   e.currentTarget.style.color = 'rgba(23, 18, 15, 0.4)';
                  }
                }}
              >
-               <Mail size={16} />
+               <Mail size={17} />
                <span>注册</span>
              </button>
            </div>
@@ -140,79 +143,70 @@ export function AuthPage({ initialMode = 'login', onAuthSuccess }: AuthPageProps
               <PasswordLogin onSignUpClick={() => setMode('signup')} onLoginSuccess={onAuthSuccess} />
             ) : (
               <>
-                {/* 注册方式选择 */}
-                <div className="segmented" style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                  gap: '10px',
-                  marginBottom: '24px',
-                  marginLeft: '0',
-                  marginRight: '0',
+                {/* 注册方式选择 - 次级 pill 风格 */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '20px',
                 }}>
-                  <button
-                    onClick={() => setSignUpMethod('email')}
-                    style={{
-                      minHeight: '42px',
-                      padding: '8px 12px',
-                      border: signUpMethod === 'email' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
-                      borderRadius: '14px',
-                      background: signUpMethod === 'email' ? 'var(--ink)' : '#fffaf0',
-                      color: signUpMethod === 'email' ? '#fff7eb' : 'var(--ink)',
-                      fontWeight: 900,
-                      fontSize: '14px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      transition: 'all 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (signUpMethod !== 'email') {
-                        e.currentTarget.style.background = '#fff0e0';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (signUpMethod !== 'email') {
-                        e.currentTarget.style.background = '#fffaf0';
-                      }
-                    }}
-                  >
-                    <Mail size={16} />
-                    <span>邮箱</span>
-                  </button>
-                  <button
-                    onClick={() => setSignUpMethod('username')}
-                    style={{
-                      minHeight: '42px',
-                      padding: '8px 12px',
-                      border: signUpMethod === 'username' ? '2px solid var(--ink)' : '2px solid rgba(23, 18, 15, 0.3)',
-                      borderRadius: '14px',
-                      background: signUpMethod === 'username' ? 'var(--ink)' : '#fffaf0',
-                      color: signUpMethod === 'username' ? '#fff7eb' : 'var(--ink)',
-                      fontWeight: 900,
-                      fontSize: '14px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      transition: 'all 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (signUpMethod !== 'username') {
-                        e.currentTarget.style.background = '#fff0e0';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (signUpMethod !== 'username') {
-                        e.currentTarget.style.background = '#fffaf0';
-                      }
-                    }}
-                  >
-                    <User size={16} />
-                    <span>用户名</span>
-                  </button>
+                  <span style={{
+                    fontSize: '12px',
+                    color: 'rgba(23, 18, 15, 0.45)',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}>注册方式</span>
+                  <div style={{
+                    display: 'flex',
+                    background: 'rgba(23, 18, 15, 0.06)',
+                    borderRadius: '20px',
+                    padding: '3px',
+                    gap: '2px',
+                  }}>
+                    <button
+                      onClick={() => setSignUpMethod('email')}
+                      style={{
+                        padding: '5px 14px',
+                        border: 'none',
+                        borderRadius: '17px',
+                        background: signUpMethod === 'email' ? 'var(--ink)' : 'transparent',
+                        color: signUpMethod === 'email' ? '#ffffff' : 'rgba(23, 18, 15, 0.55)',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        transition: 'all 0.18s ease',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <Mail size={13} />
+                      <span>邮箱注册</span>
+                    </button>
+                    <button
+                      onClick={() => setSignUpMethod('username')}
+                      style={{
+                        padding: '5px 14px',
+                        border: 'none',
+                        borderRadius: '17px',
+                        background: signUpMethod === 'username' ? 'var(--ink)' : 'transparent',
+                        color: signUpMethod === 'username' ? '#ffffff' : 'rgba(23, 18, 15, 0.55)',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        transition: 'all 0.18s ease',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <User size={13} />
+                      <span>密码注册</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* 注册表单 */}
